@@ -1,0 +1,50 @@
+---
+author: huji0624
+comments: true
+date: 2012-10-27 04:39:07+00:00
+layout: post
+slug: '%e7%94%b1%e4%b8%80%e4%b8%aa%e8%ae%a9%e4%ba%ba%e6%8a%93%e7%8b%82%e7%9a%84bug%e6%83%b3%e5%88%b0%e7%9a%84'
+title: 由一个让人抓狂的Bug想到的.
+wordpress_id: 598
+categories:
+- iOS
+---
+
+昨天一个让人非常抓狂的bug耗费了我差不多一整天的时间，今天上午终于把bug定位并纠正掉。
+
+我先详细说说这个bug的事。故事是这样的:
+
+我们的ios应用有一个MainViewController，在初始化的时候，我会去检查用户是否登陆，如果没有登陆，我会使用这个MainViewController的presentModalViewController方法来展示一个登陆窗口。登陆成功后，再使用dismissModalViewController方法将这个登陆窗口收起。比如我把这个登陆的UIViewController代码大概是这样的:
+
+
+    
+    
+    @interface LoginViewController : UIViewController
+    
+    @property(nonamic,retain) IBOutLet UITextField *usernameTextField;
+    @property(nonamic,retain) IBOutLet UITextField *passwordTextField;
+    
+    @end
+    
+    @implementation LoginViewController
+    
+    @synthesize usernameTextField,parentViewController;
+    
+    @end
+    
+
+
+
+我确实是在代码中犯了一个错误，我本来应该使用synthesize声明passwordTextField，但是由于使用xode的自动补全太过随意加上粗心大意，我把passwordTextField写成了parentViewController.这里就是噩梦的开始.
+
+这一个bug表现出来了非常奇怪的现象，当我点击登陆，dismissModalViewController的时候，对于iOS5以及以后的系统，一切都非常正常，但对iOS5之前的版本，整个程序会卡死在主线程，我通过调试发现，程序会进入dismissModalViewController这个函数，就再也不返回了。（关于这一点，我有一点自己的猜想，稍后解释）这样的现象无疑会让我怀疑是由于iOS版本导致的问题，我查看了关于dismissModalViewController的说明，貌似说在iOS6以后会废弃，以后会使用另外一个api来实现相似的功能，但编译能通过，说明目前还是支持的。吧啦吧啦其中定位到这个问题的中间过程我就不详述了，尝试了各种办法，分解代码，新建demo等，好歹最终定位到了我犯得那个愚蠢的错误。
+
+但我只是想给自己辩解一下，这真不能全怪我。我真心觉得这个是oc的缺陷。任何语言都有它狗屎的一面。
+
+1.synthesize 的作用是为property声明get和set方法，如果是一个父类中的property，那么你再声明一次synthesize会发生什么呢。根据我目前的经验，他会给你添加get和set方法，并且是override了父类的相应方法而且没有调用super。在oc中，如果你重写了某个方法，是不需要任何别的声明的，所以我在不知不觉中就改变了父类的行为，而我猜测，在iOS5之前的代码中，当parentViewController返回nil的时候，代码陷入了某种死循环，而后的系统中修复了这个问题。（至此，我表示真的非常怀念Java中的@override标签).我曾经还因为这个原因犯过另外一个错误，在不知不觉中重写了一个方法，而我其实没想这么做，只是碰巧把函数名写成了和那个函数一样的。_/\_
+
+2.我刚学习objective-c的时候，就很不明白，为什么声明了property还需要写一遍synthesize，这不多此一举么，当时我记得，要是不写synthesize，编译器会报一个警告的错误，而且在运行时，也会有找不到get或者set方法的exception.但是从某个版本的oc开始，你已经不需要写synthesize了，这也是为什么我把声明passwordTextField写成了parentViewController，但查找起来如此费劲的原因，要是以前的编译器，我这里很快就能发现这个漏写的synthesize，也许就能发现这个bug。如果我是按现在新语法来写，我也就不需要写synthesize，也就根本不会引入这个bug。不管怎么说，我总有一种被人玩弄的感觉。
+
+我本打算是重点吐槽一下oc和ios的，借此发泄一下心中对apple积攒已久的怨念，但个人资历太浅，写了点就不好意思继续写下去了，我真想看到哪位大神把ios和oc彻底吐槽一番。我忍了很久了。我甚至打算创建一个github项目，用来收集大家对ios和对oc的吐槽。虽然apple的产品以优秀的用户体验著称，但我觉得苹果把最优秀的人才都用到了用户那，对于开发者，实在是有点太不重视，很多设计都让我用起来很不舒服，相比之下，我觉得google就做得好得多。
+
+当然这里说得故事可能更多是关于语言层面的。关于语言这个话题，其实我觉得本身太也没太多好说的，各种语言，各有各的特点，本身没有太多好争的，因为毕竟每一种语言的设计者在这么设计的时候总是有他自己特定的原因的，没有人会故意去设计一门烂语言。你也许会抱怨，xx语言居然不支持xxx特性，居然没有这个功能，但要知道，他在别的什么方面，总会有别的什么好处。我现在也只能这么去想了。

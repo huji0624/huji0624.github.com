@@ -1,0 +1,50 @@
+---
+author: huji0624
+comments: true
+date: 2012-05-15 07:26:47+00:00
+layout: post
+slug: android-%e5%85%b3%e4%ba%8e%e4%bc%91%e7%9c%a0%e7%9a%84%e5%87%a0%e4%b8%aa%e5%9d%91%e7%82%b9
+title: Android 关于休眠的几个坑点
+wordpress_id: 474
+categories:
+- Android
+---
+
+首先看一下Android Powermanager Class Overview，对Android的几种不同的休眠模式有个大致了解。
+
+如果不进行特别的设置，Android会在一定时间后屏幕变暗，在屏幕变暗后一定时间内，约几分钟，CPU也会休眠，大多数的程序都会停止运行，从而节省电量。但你可以在代码中通过对Powmanager API的调用来设置不同的休眠模式。
+
+
+Flag Value	        CPU	Screen	Keyboard
+PARTIAL_WAKE_LOCK	On*	Off	Off
+SCREEN_DIM_WAKE_LOCK	On	Dim	Off
+SCREEN_BRIGHT_WAKE_LOCK	On	Bright	Off
+FULL_WAKE_LOCK	        On	Bright	Bright
+
+如上表，最高等级的休眠是屏幕，键盘等，cpu都全部休眠。可以设置不同的模式，让其产生不同的休眠，比如让cpu保持运行。
+设置代码如下：
+
+
+    
+    
+    PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+     PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.SCREEN_DIM_WAKE_LOCK, "My Tag");
+     wl.acquire();
+       ..screen will stay on during this section..
+     wl.release();
+    
+
+
+
+我曾经遇到的几个坑点及解决：
+
+1.向服务器轮询的代码不执行。
+
+曾经做一个应用，利用Timer和TimerTask，来设置对服务器进行定时的轮询，但是发现机器在某段时间后，轮询就不再进行了。查了很久才发现是休眠造成的。后来解决的办法是，利用系统的AlarmService来执行轮询。因为虽然系统让机器休眠，节省电量，但并不是完全的关机，系统有一部分优先级很高的程序还是在执行的，比如闹钟，利用AlarmService可以定时启动自己的程序，让cpu启动，执行完毕再休眠。
+
+2.后台长连接断开。
+
+最近遇到的问题。利用Socket长连接实现QQ类似的聊天功能，发现在屏幕熄灭一段时间后，Socket就被断开。屏幕开启的时候需进行重连，但每次看Log的时候又发现网络是链接的，后来才发现是cpu休眠导致链接被断开，当你插上数据线看log的时候，网络cpu恢复，一看网络确实是链接的，坑。最后使用了PARTIAL_WAKE_LOCK，保持CPU不休眠。
+
+3.调试时是不会休眠的。
+让我非常郁闷的是，在调试2的时候，就发现，有时Socket会断开，有时不会断开，后来才搞明白，因为我有时是插着数据线进行调试，有时拔掉数据线，这时Android的休眠状态是不一样的。而且不同的机器也有不同的表现，比如有的机器，插着数据线就会充电，有的不会，有的机器的设置的充电时屏幕不变暗等等，把自己都搞晕了。其实搞明白这个休眠机制，一切都好说了。

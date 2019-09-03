@@ -1,0 +1,51 @@
+---
+author: huji0624
+date: 2014-05-20 13:38:58+00:00
+layout: post
+slug: 'ios定位crash解决思路'
+title: ios定位crash解决思路
+categories:
+- iOS
+---
+
+在我们的程序中，一直有一类和CoreLocation模块相关的crash，在ios7.0之前的版本中，这类crash占比不是非常高，在ios7.0及以后，这种类型的crash比例突然飙升，让我们不得不对这种类型的crash加以重视了。
+
+大体上，这类crash的最终函数栈如下：
+
+	0  libobjc.A.dylib                0x385f0626 objc_msgSend + 6
+	1  CoreLocation                   0x2e340c24 ___lldb_unnamed_function1254$$CoreLocation + 288
+	2  CoreLocation                   0x2e33f624 ___lldb_unnamed_function1194$$CoreLocation + 444
+	3  libxpc.dylib                   0x38c103a8 _xpc_connection_call_event_handler + 40
+	4  libxpc.dylib                   0x38c12e66 do_mach_notify_port_destroyed + 122
+	5  libxpc.dylib                   0x38c12dd0 _Xmach_notify_port_destroyed + 104
+	6  libxpc.dylib                   0x38c12d46 notify_server + 62
+	7  libxpc.dylib                   0x38c0e9ce _xpc_connection_mach_event + 1926
+	8  libdispatch.dylib              0x38ad1f42 _dispatch_mach_msg_invoke + 118
+	9  libdispatch.dylib              0x38ad4c70 _dispatch_queue_drain + 412
+	10 libdispatch.dylib              0x38ad1a6a _dispatch_mach_invoke + 78
+	11 libdispatch.dylib              0x38ad4c70 _dispatch_queue_drain + 412
+	12 libdispatch.dylib              0x38ad1c6e _dispatch_queue_invoke + 42
+	13 libdispatch.dylib              0x38ad4c70 _dispatch_queue_drain + 412
+	14 libdispatch.dylib              0x38ad1c6e _dispatch_queue_invoke + 42
+	15 libdispatch.dylib              0x38ad55f0 _dispatch_root_queue_drain + 76
+	16 libdispatch.dylib              0x38ad58dc _dispatch_worker_thread2 + 56
+	17 libsystem_pthread.dylib        0x38c00c16 _pthread_wqthread + 298
+
+最终crash的函数可能会有几种不同的情况，例如：CoreFoundation/CFBasicHashGetBucket，CoreFoundation/CFDictionaryApplyFunction等，但总体上引起的原因都是一致的。
+
+这一类crash咋一看和我们自己的代码没有什么关系，这正是最让人头疼的地方，因为这会很容易让我们去和这些crash撇清关系，但基本上可以这么说，绝大多数的crash，就算函数栈中没有项目相关代码，也是由于我们自己的代码引起的，这里比较幸运的是，这一系列的crash的都和CoreLocation有关，让我和我的同事把注意力集中在这一块，项目中使用CoreLocation的地方也不多。
+
+由于本类crash在函数栈最终有objc_msgSend的出现，基本上可以确定这是由于内存管理方面的问题引起的，对CoreLocation的使用绝大部分操作集中在对CLLocationManager的操作上，起初我们认为可能是由于我们对CLLocationManager的使用有不符合内存管理的地方，但经过一番检查以后，我们排除了这种可能性。
+
+在网上经过一番搜索以后，我们发现有些老外也遇到了我们类似的问题，有些人解决掉了，有些则没有，有些人通过把CLLocationManager的stopUpdatingLocation的调用和将CLLocationManager的release调用延迟解决了一种类型的crash，但由于他的crash函数栈和我们的看起来很不一样，而且我认为我们遵守了apple的内存使用规范，所以我排除了这种解决方案。
+
+于是我和xj回到我们的crash函数栈上来，尝试恢复出CoreLocation崩溃的那两个函数，但最终无果，apple应该是把相关库的符号表全都不在开放，经过一番思索，我们基本上确定该崩溃发生的原因是位置信息回调时发生的，xj说，位置信息相关的模块属于其他进程，在需要更新位置信息的时候，通过gcd和xpc进行进程间通信，把相关数据传给我们的程序进程，这一知识让我突然有了点思路。
+
+我们的程序中也采用了这样的操作：
+
+	[CLLocationManager stopUpdatingLocation];
+	CLLocationManager = nil;
+
+如果对于回调的通知是一种进程间通信，那么停止位置更新的调用，也需要一定的时间通过进程间通信的方式来通知到位置模块，而下一句操作则会在下一个runloop中把CLLocationManager相关的内存回收掉，那么这之间的时间差就很可能会让回调发生时访问一段无效的内存，那么之前网络上关于延迟release CLLocationManager的操作就也能站得住脚了。有了这样的结论，改起来就容易了，其实关于CLLocationManager，整个程序用一个就行了，不需要进行回收，在相应的需求下调用相应的start和stop操作就能够控制位置更新。
+
+后经验证，在最新的版本中，这一类型的crash已经解决。

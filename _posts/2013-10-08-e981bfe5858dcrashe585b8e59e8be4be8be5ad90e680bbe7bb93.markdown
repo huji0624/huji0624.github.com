@@ -1,0 +1,71 @@
+---
+author: huji0624
+comments: true
+date: 2013-10-08 10:41:36+00:00
+layout: post
+slug: '%e9%81%bf%e5%85%8dcrash%e5%85%b8%e5%9e%8b%e4%be%8b%e5%ad%90%e6%80%bb%e7%bb%93'
+title: 避免crash典型例子总结
+wordpress_id: 708
+categories:
+- iOS
+---
+
+1.避免数组越界
+
+在调用NSArray的objectAtIndex方法的时候，先判断数组是否越界，比如：
+id obj = nil;
+if (i<array.count){
+obj = [array objectAtIndex:i];
+}
+
+2.避免给字典赋nil值
+
+在调用NSDictionary的setObject:forKey:方法的时候，先判断object是否为空，比如：
+if (obj){
+[dict setObejct:obj forKey:@"xx"];
+}
+
+3.避免找不到对应的方法
+
+这一类的crash主要是由两种情况造成：
+1）对应方法未实现导致
+这种情况在线上相对比较少，基本上能在测试阶段发现
+2）实例类型错误
+这种情况相对1）中是比较多出现的，尤其是由于你的实例类型是跟数据相关度很高的时候，无论这种数据是来自本地还是网络，都有很多可能性导致你的数据不正确，而对应的实例类型也不正确导致。但在线上的环境中，这种类型的crash在crash总量中占比比较少。
+比如你的模块依赖一个dict类型的传入参数，其中有一个key值为title，类型为NSString的参数，而你强依赖于这个类型的某些方法，由于在dict中传递参数都是id类型的，所以这个部分不能有效的编译检查，那你的代码就需要做一些类型检查，例:
+NSString *title = [dict objectForKey:@"title"];
+if ([title isKindOfClass:[NSString class]]){
+if ([title isEqualToString:@"xx"]){
+}
+}
+
+4.作为delegate的回调，在自己销毁的时候，没有把相应的delegate设为nil，这可能会导致产生该delegate的回调时crash。
+
+1）在非arc情况下，以常见的scrollveiw的使用为例，如果delegate的property属性为assign，当scrollView的delegate执行dealloc的时候，应该把scrollView的delegate置为nil:
+@implemention BMTestPage
+-(void)viewDidLoad{
+[super viewDidLoad];
+_scrollView = [UIScrollView alloc] initWithFrame:CGrectMake(0,0,320,480)];
+_scrollView.delegate = self;
+[self.view addSubView:_scrollView];
+}
+
+-(void)dealloc{
+_scrollView.delegate = nil;
+[super dealloc];
+}
+@end
+
+2）在arc的情况下，应该改把delegate的property属性设置为weak。但是对于系统原生控件，如UIScrollView，UIWebView，UITableView等等，delegate属性还是为assign，所以对于类似的delegate，最好都在dealloc中把delegate置为nil。
+
+5.在遍历数组的循环中，同一次runloop中修改这个数组的内容
+错误的用法如下：
+NSMutableArray *array = xxxxx;
+for (NSString *str in array){
+if ([str isEqualToString:@"xx"]){
+[array removeObject:str];
+}
+}
+避免这种情况的处理方式很多，主要根据当时的使用方式有区别，比较容易，但是实际工程中，直接写出以上类似代码产生exception的情况比较少见，多数情况下，这种类型的隐患隐藏的比较深，大家尤其需要注意在修改数组内容的时候，该数组的作用范围，如果该数组的作用域只在当前函数，往往比较容易发现，但如果该数组的作用范围比较广，就需要跟进一下在修改数组内容时的上下文环境，确认是否该调用可能同时处于遍历该数组的runloop中。
+
+6.对于其他模块的强依赖，先做有效性检查。对于参数的依赖，先做参数检查。这一条其实可以属于编码时的基本规范，尤其是当你直接使用一个生命周期不由你的代码控制的变量时。

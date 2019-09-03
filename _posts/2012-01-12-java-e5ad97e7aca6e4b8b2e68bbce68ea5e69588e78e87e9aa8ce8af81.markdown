@@ -1,0 +1,61 @@
+---
+author: huji0624
+comments: true
+date: 2012-01-12 14:56:18+00:00
+layout: post
+slug: java-%e5%ad%97%e7%ac%a6%e4%b8%b2%e6%8b%bc%e6%8e%a5%e6%95%88%e7%8e%87%e9%aa%8c%e8%af%81
+title: Java 字符串拼接效率验证
+wordpress_id: 367
+categories:
+- JAVA
+---
+
+由于开始编程的时间也不长，一般来说比较关注功能的实现，很少会考虑效率的问题，但最近遇到的很多想要解决的问题貌似都和效率有关。于是打算一点一点开始积累关于效率方面的知识，当然说到底就是算法问题，算法的书也在看。现在先验证几个平时遇到的问题。就从最简单的字符串开始吧。
+
+经常在程序中看到要拼接字符串的情况，我看到项目的代码一般都是利用StringBuilder的append（）方法来拼接，最后toString（）一下。我开始一直觉得是因为这样写代码比较美观，但后来看了些算法的东西，又觉得可能效率也是一个因素。特地验证了一下。
+
+
+    
+    
+                    StringBuilder sb=new StringBuilder();
+    		for(int i=0;i<1000000;i++){
+    			sb.append("asdfg");
+    		}
+                     sb.toString();
+    
+
+
+
+这个程序运行了一百万次，用了695ms.
+
+
+    
+    
+                    String a="";
+    		for(int i=0;i<50000;i++){
+    			a=a+"asdfg";
+    		}
+    
+
+
+
+同样，用字符串相加的方式来拼接，只运行了五万次，就用了36119ms，而且时间增长还是某种指数性的。
+
+这两种方式的区别，我觉得主要由于字符串在Java中是存放在栈中，先在栈中生成一个"asdfg",再由a+"asdfg"生成一个新字符串并存放在栈中，再把a指向新生成的字符串。估计主要耗时在相加时。看网上的资料说字符串相加时，编译器会构造一个StringBuilder，append之后再toString。
+
+于是再写一个程序验证下：
+
+    
+    
+    String a="";
+    		String b="asdfg";
+    		for(int i=0;i<50000;i++){
+    			StringBuilder t=new StringBuilder(a);
+    			t.append(b);
+    			a=t.toString();
+    		}
+    
+
+
+
+用时35002ms.貌似是那个么意思.估计就是新建对象造成的开销.

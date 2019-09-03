@@ -1,0 +1,114 @@
+---
+author: huji0624
+comments: true
+date: 2012-07-02 13:00:25+00:00
+layout: post
+slug: ios%e5%bc%80%e5%8f%91-%e4%b8%a4%e4%b8%aa%e5%be%88%e5%9b%b0%e6%83%91%e7%9a%84%e9%97%ae%e9%a2%98
+title: iOS开发 两个很困惑的问题
+wordpress_id: 530
+categories:
+- iOS
+- Objective-C
+---
+
+最近在开发中遇到两个很困惑的问题，现在自己也还没能搞明白是怎么回事，暂时在网上也没有搜到相应的资料,我在想是不是自己犯了什么低级错误。
+
+1.关于LLVM gcc 和 Apple LLVM compiler 的困惑。
+
+起因是最近在重构项目的部分代码时，自己先新建了一个工程写了一个demo程序，当时默认选择的是Apple LLVM compiler 3.1 ，当完成demo后，我把demo程序的部分代码迁移到主干程序，build时发现出现了诸多警告，甚至某些部分是编译错误，主干工程使用的编译器是LLVM gcc。
+
+对比发现（在我的代码中），主要的区别在于对于未在 .h 文件中声明的方法，在使用Apple编译器编译时编译通过，运行正常，这些未声明的方法相当于为某个 @interface 添加了私有方法。在使用gcc编译时，对于objective c代码，如果使用代码在声明代码的前面，会产生 may not responed to selector 的编译警告，对于c代码，如果使用代码在声明代码之前，会产生 undefined method的编译错误。
+
+对与这两点，不同的编译器对代码的编译方式产生这种差别我还能理解。
+
+但我还发现一个很诡异的现象，对于c代码，在Apple编译器时，使用比较自由，使用代码在声明代码之前，也能正常编译和运行，但使用gcc时，不同的传入参数会产生不同的现象。
+
+对于c代码:
+
+    
+    
+    
+    int foo(int a){
+        print("%d",a);
+    }
+    
+    int main(){
+        int fa = 10;
+        foo(fa);
+    }
+    
+    
+
+
+代码如上，声明代码在使用代码之前,对于gcc编译通过，运行正常，打印10.如果把foo函数的声明写到main之后，会有编译警告，但编译通过，运行正常，打印10.
+
+对于c代码:
+
+    
+    
+    
+    int main(){
+        float fa = 10.0;
+        foo(fa);
+    }
+    
+    int foo(float a){
+        print("%f",a);
+    }
+    
+    
+
+
+代码如上，把原来的参数由int改为float，把foo函数声明写在main之后，gcc编译时，编译错误，找不到foo方法.传入的参数不同会对编译的过程产生如此大不同么？
+
+对于objective c 代码,gcc也存在类似的现象：
+
+    
+    
+    
+    -(void) foo:(int)a{
+        NSLog("%d",a);
+    }
+    
+    -(void) mainxx{
+        int fa = 10;
+        [self foo:fa];
+    }
+    
+    
+
+
+代码如上,foo函数未在 .h 文件中声明.当foo函数传入int值时，当foo函数写在mainxx之前,编译正常，运行正常，打印10；当foo函数写在mainxx之后时，编译警告，但运行正常，打印10。但如果把foo函数的参数改为float类型（在Objective c中对应CGFloat），当foo函数写在mainxx之前时，编译正常，运行正常，打印10；当函数foo写在mainxx之后时，编译警告，运行时打印0,在debug时用调试器看a的值也是0。为什么int和float在运行时会有如此的区别？
+
+2.最近在开发时常遇到如下错误
+
+The debugger breaks here
+
+    
+    
+    libsystem_kernel.dylib`__pthread_kill:
+    0x3619a324:  mov    r12, #328
+    0x3619a328:  svc    #128
+    0x3619a32c:  blo    0x3619a344               ; __pthread_kill + 32
+    0x3619a330:  ldr    r12, [pc, #4]
+    0x3619a334:  ldr    r12, [pc, r12]
+    0x3619a338:  b      0x3619a340               ; __pthread_kill + 28
+    0x3619a33c:  stceq  p12, c9, [lr, #896]
+    0x3619a340:  bx     r12                      
+    0x3619a344:  bx     lr  
+    
+
+
+At the line
+
+    
+    
+    0x3619a32c:  blo    0x3619a344               ; __pthread_kill + 32
+    
+
+
+
+开始以为时内存方面的错误，因为一般类似无法定位的错误都时内存错误。但debug了一下发现自己写的代码都没有crash，在网上搜了搜。
+在StackOverflow上找到的问题，[ios-app-crashing-before-running](http://stackoverflow.com/questions/11068550/ios-app-crashing-before-running)。
+
+按照他们的方法，我重启iPad和Xcode，果然运行通过，但有时有会出现类似错误，我又只能重启一遍。以前我在搞android的时候从来遇到过类似的问题，所以这次很困惑，到底是我自己程序的bug还是系统自己的bug？

@@ -1,0 +1,94 @@
+---
+author: huji0624
+comments: true
+date: 2012-02-18 09:54:42+00:00
+layout: post
+slug: java-%e6%96%87%e4%bb%b6%e5%ad%98%e5%8f%96%e9%80%9f%e5%ba%a6%e7%9a%84%e5%ae%9e%e9%aa%8c
+title: Java 文件存取速度的实验
+wordpress_id: 378
+categories:
+- JAVA
+---
+
+最近在项目中遇到个问题，就是滚动的时候的效果始终不能让自己满意，产品的功能是上下滑动滚屏，ViewGroup中放三页，当要滑到下一页时，在最后一页加一个View，去掉第一个View，去掉的View把内容存储到外存上，加载的View从外存读取存储的内容，但是滑动时总是一卡一卡的，我开始觉得是存取文件造成的，结果使用异步地存取文件以后还是会出现这个问题。不过这还是引出另外一个问题。
+
+之前一直对存取文件的速度不太有概念，我一直的理解是，存取文件时的初始化开销很大，所以存一个10M的文件肯定比存10个1M的文件要慢，但是又不是很确定，于是写了个Demo试了一下。现象让我有些困惑。代码如下，在ABC方法前后打印时间。
+
+
+    
+    
+    public class FileExperiment {
+    	
+    	private int size=100;
+    	
+    	public void saveExA(){
+    		
+    		byte[] data=new byte[1024*1024*size];
+    		saveFile("demo", data);
+    		
+    		//100M 5430--300
+    		//200M 12987--587
+    	}
+    	
+    	public void saveExB(){
+    		byte[] data=new byte[1024*1024*1];
+    		
+    		for(int i=0;i<size;i++){
+    			saveFile("demo"+i, data);
+    		}
+    		
+    		//1M*100 200
+    		//1M*200 400
+    	}
+    	
+    	public void saveExC(){
+    		byte[] data=new byte[1024*1024*2];
+    		
+    		for(int i=0;i<size;i++){
+    			saveFile("demoC"+i, data);
+    		}
+    		
+    		//2M*100 398
+    		//2M*200 3900--1700
+    	}
+    	
+    	public static void saveFile(String filename, byte[] data) {
+    		
+    		File save = new File("./demo/"+ filename);
+    
+    		FileOutputStream os = null;
+    		try {
+    			save.createNewFile();
+    
+    			os = (new FileOutputStream(save));
+    			os.write(data);
+    		} catch (IOException e) {
+    			// TODO Auto-generated catch block
+    			e.printStackTrace();
+    		}finally{
+    			if (os != null) {
+    				try {
+    					os.close();
+    				} catch (IOException e) {
+    					// TODO Auto-generated catch block
+    					e.printStackTrace();
+    				}
+    			}
+    
+    		}
+    
+    	}
+    
+    
+    }
+    
+
+
+
+如在代码中注释所写，当size=100时，A方案耗时5430ms-300ms都出现过，B方案比较稳定，200ms，其他数据同理。
+
+很奇怪的现象，正好这几天在看linux文件系统的文档，加上一个朋友提点，存取文件采用这个方法测试速度不科学。
+
+首先不同的文件系统可能会影响这个存取速度，然后在写文件时，系统级别上是先写到内存中，等一个缓存区域的大小被填满时，才会由cpu一次性写到外存上，所以在这里打印的时间其实不是真正的存储所用时间（但我觉得这个也无所谓，只要把内容写出去了，就ok了），再者我觉得Jvm也许也会在这上面有些手脚。但无论是其中什么因素影响，存100M的文件都比存100次1M的文件要慢，不是以前我想的那样。
+
+唉，突然又感叹非科班出身的硬伤了。还希望高手能指点一下。

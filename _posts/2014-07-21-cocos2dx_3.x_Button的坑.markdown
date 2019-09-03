@@ -1,0 +1,38 @@
+---
+author: huji
+comments: true
+date: 2014-07-21 20:54:54+00:00
+layout: post
+slug: cocos2dx_3.x_Button的坑
+title: cocos2dx_3.x_Button的坑
+categories:
+- game
+---
+最近研究了一下cocos2dx 3.x的UI系统，打算试一试他最新推出的Widget UI组件，因为好多东西和ios的东西比较像，没想到一试就进坑。
+
+我简单地写了一个Button监听点击事件，然后把它加入到cclayer中：
+
+    //	cocos2d::ui::Button *bt = cocos2d::ui::Button::create("play.png");
+	cocos2d::ui::Button *bt = cocos2d::ui::Button::create();
+	bt->ignoreContentAdaptWithSize(false);
+    bt->setSize(Size(100,50));
+    bt->setTitleFontSize(40);
+    bt->setTitleText("testButton");
+    //    bt->addTouchEventListener(CC_CALLBACK_2(HelloWorld::buttonClick, this));  //std::bind
+    bt->addTouchEventListener([](cocos2d::Ref *pSender, cocos2d::ui::Widget::TouchEventType type){
+        log("lambda");
+    });
+    bt->setPosition(Vec2(visibleSize.width/2, visibleSize.height/2));
+    this->addChild(bt);
+
+结果是怎么都监听不到点击事件。
+
+首先说Widget的addTouchEventListener方法，在3.x变成了传入一个std::function，据说这都是c++11的东西，说实话，我这种c++新手对这种东西还真是一头雾水，网上关于3.x的资料真是少了又少，官方又没有文档，只能自己摸索。
+
+最终我发现其实写成lambda还是写成std：：bind都可以，lambda比较方便。
+
+再说点击不到的情况，跟进源码才发现是无论怎么点，hitTest中返回的结果都是没有点中，我跟进了一些变量，发现contentSize始终都是0，0，所以怎么都点不中也是理所当然的，我记得之前用Label的时候，contentSize都会根据我的文字长短自己算出来的，结果button不是这样的。。。只有在使用图片的情况下，才会去算contentSize.
+
+所以如果你要像我一样只写文字，那就得自己设置size，直接设置contentSize也是不行的，不知道为什么，估计是因为图片没有，所以contentsize直接也变0了。
+
+如果是使用图片，那就没有问题了。估计这个设计还得改。

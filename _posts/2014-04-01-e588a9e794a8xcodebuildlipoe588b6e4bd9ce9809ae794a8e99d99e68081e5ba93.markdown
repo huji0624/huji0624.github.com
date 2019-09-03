@@ -1,0 +1,30 @@
+---
+author: huji0624
+comments: true
+date: 2014-04-01 13:38:58+00:00
+layout: post
+slug: '%e5%88%a9%e7%94%a8xcodebuildlipo%e5%88%b6%e4%bd%9c%e9%80%9a%e7%94%a8%e9%9d%99%e6%80%81%e5%ba%93'
+title: 利用xcodebuild+lipo制作通用静态库
+wordpress_id: 724
+categories:
+- iOS
+---
+
+我们可能常遇到需要把某一部分程序提取成一个静态库的形式提供给别人，但是利用xcode界面的形式编译出来的静态库都是针对不同arch进行编译的，如果提供多个静态库使用起来非常不方便，因为其他人可能既要在真机调试，也需要在模拟器进行调试，利用os x提供的lipo工具可以把多个静态库合成一个.但是手动操作也比较麻烦.可以利用xcodebuild把这一过程完全自动化.
+
+编译.
+xcodebuild
+xcodebuild -sdk iphonesimulator7.0
+首先利用xcodebuild命令编译出Release-iphoneos和Release-iphonesimulator目录
+
+创建通用静态库.
+lipo -create Release-iphoneos/libxx.a Release-iphonesimulator/libxx.a -output libxx.a
+然后利用lipo工具创建出通用静态库
+
+读取arch信息.
+lipo -info libxx.a
+利用lipo -info可以读取通用静态库支持的arch.截取arch信息并合成文件名.如：libxx_armv7_i386.a.
+
+重命名.
+mv libxx.a libxx_armv7_i386.a
+这样就获得一个命名清晰的通用静态库文件了.

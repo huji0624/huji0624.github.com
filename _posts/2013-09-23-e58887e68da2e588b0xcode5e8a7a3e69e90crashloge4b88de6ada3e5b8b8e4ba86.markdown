@@ -1,0 +1,26 @@
+---
+author: huji0624
+comments: true
+date: 2013-09-23 08:35:32+00:00
+layout: post
+slug: '%e5%88%87%e6%8d%a2%e5%88%b0xcode5%e8%a7%a3%e6%9e%90crashlog%e4%b8%8d%e6%ad%a3%e5%b8%b8%e4%ba%86'
+title: 切换到Xcode5,解析crashlog不正常了
+wordpress_id: 705
+categories:
+- iOS
+---
+
+前段时间Xcode5发布了GM版本，同事把公司解析crash的大mac升级到了Xcode5，后来我发现，最近几天的crashlog解析出现了很奇怪的现象，很多函数都解析不出来，变成了类似___lldb_unnamed_function11064的解析结果，由于对symbolicatecrash这个脚本还是不太熟悉，跟了半天才发现问题。
+
+原来是苹果升级了atos这个命令，包括系统自带的atos命令（因为升级到xcode5必须把系统也升级到某个特定版本），在原来的symbolicatecrash的脚本中，最终会执行类似的命令来解析地址到函数：
+atos -arch armvx7 -o '.apppath/excutable' -l -0x00xxx 0x00xxxx
+但是用最新的atos命令执行类似的操作已经不能完全得到想要的结果。
+
+所以如果你自己构建了一个crashlog的解析脚本，并且依赖于atos命令，那就需要修改一下了
+
+修复方式：
+1.把原来xcode4.x的atos命令覆盖xcode5的atos命令。（我是这么弄的，最简单，但可能会引起xcode5自带的解析出现某些问题）
+2.自己修改symbolicatecrash中atos命令的位置，然后把原来xcode4的atos命令放到该路径
+3.自己修改symbolicatecrash脚本中-o后面的路径，改为dsym的excutable的路径，也可以解析出来（改脚本比较麻烦）
+
+最后，我在Xcode5中已经找不到symbolicatecrash这个脚本了，不知道是移动了位置还是以后不再维护。

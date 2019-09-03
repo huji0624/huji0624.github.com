@@ -1,0 +1,136 @@
+---
+author: huji0624
+comments: true
+date: 2011-11-25 04:09:15+00:00
+layout: post
+slug: '%ef%bc%88%ef%bc%81%e6%a0%87%ef%bc%89%e7%94%a8ant%e8%87%aa%e5%8a%a8%e7%94%9f%e6%88%90%e5%a4%9a%e4%b8%aaandroid%e5%ba%94%e7%94%a8%e5%8c%85'
+title: （！标）用Ant自动生成多个Android应用包.
+wordpress_id: 262
+categories:
+- Android
+- 非标准程序员成长之路
+tags:
+- ant
+---
+
+首先感谢这篇文章，让我找到入门的方法[Using Ant to Automate Building Android Applications](http://www.androidengineer.com/2010/06/using-ant-to-automate-building-android.html)，很伤心地发现，关于Ant打包Android几乎没有靠谱的中文文章，决定自己总结一篇，好让以后像我一样的新手不再纠结这个问题，转载请注明，我在文中有任何错误欢迎指出。
+
+首先说明一下场景，项目要针对每个商城生成一个apk包，因为不同的apk包中有一个渠道参数不同，用于服务器端进行数据统计，这是要写在源码里面的，一开始只有一个渠道，但后来发现增加到十几个渠道，如果每次都用eclipse手动打包，会打得很蛋疼。于是不得不来自己定制ant打包脚本，实现自动打包。在这个过程中还产生了一些其他的感悟，见[非标准程序员修炼-请尝试最原始的东西.](http://www.whoslab.me/blog/?p=263 )。大概讲了一些新手学习的感受。
+
+进入正题，关于Ant的介绍和使用方法就不说了，这个网上还是有一堆的。
+
+	
+* 让Ant脚本跑起来
+
+
+首先生成系统自动生成的build.xml文件，用命令行敲入 android update project --path .再在这个build.xml文件下来进行修改生成自己的定制化ant脚本，这样可以省去不少功夫。如果你仔细阅读这个xml文件中的E文，就能明白很多东西了。其实现在这个build.xml文件应该已经是一个可以跑起来的ant脚本了，通过eclipse查看，会发现报错，default找不到help这个target。改成你想实现的target就行了，比如我就想打包，就改成了release。有空可以看看里面import的那个build.xml都实现了什么任务,这样才能实现真正意义上的定制自己的打包脚本。
+
+我曾经尝试上面那篇博文的方法，一度失败，我看了下博文，日子有点久远了，系统自动生成的build.xml文件就和那篇博文中描述的不一样，我觉得应该是随着android版本的提升，或者adt升级，这个build.xml发生了变化。还好这个文件中的注释写得很清楚，我们可以按照注释的指导来。
+<!-- more -->
+	
+* 开始定制自己的打包脚本
+
+打开build.xml文件，在import标签可以看到这么一段E文。
+
+Import the actual build file.
+
+         To customize existing targets, there are two options:
+         - Customize only one target:
+             - copy/paste the target into this file, *before* the
+                task.
+             - customize it to your needs.
+         - Customize the whole content of build.xml
+             - copy/paste the content of the rules files (minus the top node)
+               into this file, replacing the  task.
+             - customize to your needs.
+
+说得很清楚了，你可以在这个build.xml中import之前重写你需要自己定制的任务，或者你可以把整个import的那个build.xml的内容都复制过来，删掉import，然后很随意地修改。
+
+	
+* 在不手动去修改源码的情况下打包不同版本
+
+
+之前的情景我说了，项目因为要在源码中写入不同的渠道号码，编译打包不同的版本，之前我们的做法就是手动去修改源码中的那个from参数，再手动编译打包一个版本，目前只有一个不同的参数，打包的版本也不算很多，所以还能应付，就是麻烦一点，但以后若是有很多参数需要修改，很多版本，就急需一个一键执行的自动化脚本了。
+
+方法如这般：在源码中使用一个class来专门定义这些不同版本中会不同的参数，比如
+
+
+    
+    
+    public class BuildConfig {
+    	
+    	//the from=mm params stand for it is from mm. 
+    	public static final String FROM="mm";
+    }
+    
+
+
+
+然后自己写一个相应的模板文件，比如
+
+public class BuildConfig {
+	
+	//the from=mm params stand for it is from mm. 
+	public static final String FROM="@CONFIG.FROM@";
+}
+
+然后在build.xml的pre-compile任务中来用相应的模板来替换源码中的BuildConfig.class文件。可以先删除原文件，再把模板copy过去，copy的时候用一个filter把模板中的参数替换成自己传入的参数。比如我这里的package.from，就是在执行ant的时候传入的参数，然后以上模板中的@CONFIG.FROM@ 部分就会被替换为package.from的值。代码如下：
+
+
+    
+    
+     <target name="-pre-compile">
+        		<delete file="${source.dir}/com/wefound/epaper/BuildConfig.java"></delete>
+        		<copy tofile="${source.dir}/com/wefound/epaper/BuildConfig.java" file="BuildConfig.template">
+        			 <filterset>
+        			      <filter token="CONFIG.FROM" value="${package.from}"></filter>
+        			   </filterset>
+        		</copy>
+        </target>
+    
+
+
+
+	
+* 一次操作自动打多个包
+
+
+使用上面创建好的build.xml就可以自动生成一个apk包了，但是在版本很多的情况下每次都去输入那些不同的参数也很麻烦，最好就是一次操作就打好所有的包，把参数写在文件中。
+
+思路就是用ant脚本去执行ant脚本。貌似也可以写一个批处理文件来做这个事情。
+
+那就动手写一个多次执行上面那个build.xml的ant脚本。
+代码如下：
+
+
+    
+    
+    
+    <project default="package-all" name="package">
+    
+    <property file="package.properties"></property>
+    
+    <target name="android.1">
+    <ant>
+    <property name="package.from" value="1"></property>
+    </ant>
+    </target>
+    
+    <target name="android.2">
+    <ant>
+    <property name="package.from" value="2"></property>
+    </ant>
+    </target>
+    
+    <target depends="android.1,android.2" name="package-all">
+    </target>
+    
+    </project>
+    
+
+
+
+以上用到的Ant方面的东西，请自己查阅ant官方文档，写得非常清楚了。
+
+
+

@@ -1,0 +1,218 @@
+---
+author: huji
+comments: true
+date: 2016-10-11 10:34:42+00:00
+layout: post
+slug: 全栈没什么卵用，我只想很认真的玩一次nginx
+title: 全栈没什么卵用，我只想很认真的玩一次nginx
+categories:
+- coding
+---
+
+之前也偶尔搭个lamp或者lnmp环境折腾点东西，但大部分情况其实都是糊里糊涂的，遇到什么问题就是到网上一通搜，然后复制粘贴，其实这个也是不太符合我认可的学东西的方式，最近正好准备搭建一个团队内部的网站，所以就开始从nginx开始很认真的整一整，准备再买本书好好研读一下。
+
+
+
+不管搞啥互联网技术，我觉得最好从官方文档开始读起，nginx的官方入门文档还算比较简单易懂，可以在[nginx主站](http://nginx.org/en/docs/)搂一眼。
+
+
+
+### 安装
+
+nginx的安装还是比较简单的，大部分情况下，都只需要用一些包管理工具，比如linux下得yum，max os x下的brew
+
+```xx install nginx```
+
+一堆yes后应该就安装好了.
+
+
+
+### 启动和管理
+
+启动很简单，直接执行nginx命令就行了.如果没有任何报错，再执行一下ps aux | grep nginx，应该可以看到下面的输出:
+
+
+
+```nobody          35468   0.0  0.0  2463960      8   ??  S    Sun06PM   0:00.01 nginx: worker process```
+
+```root            35180   0.0  0.0  2463740      8   ??  Ss   Sun05PM   0:00.01 nginx: master process nginx```
+
+
+
+这就说明nginx启动成功了，这里有一个小坑，一般最好是用root用户来启动nginx，比如sudo nginx，否则后面很可能会遇到server的目录nginx进程没有读取或者执行的权限导致出错。
+
+
+
+```nginx -h```
+
+
+
+执行上面的命令，就可以看到一个帮助说明，nginx常用的管理方式就是执行-s参数:
+
+
+
+```nginx -s signal```
+
+
+
+其中，各个参数的意思是：
+
+* `stop` — fast shutdown
+
+
+* `quit` — graceful shutdown
+* `reload` — reloading the configuration file
+* `reopen` — reopening the log files
+
+
+
+### 配置
+
+nginx的配置应该是nginx应用里面非常重要的一环了，对nginx的控制基本上都是通过配置文件来实现的。
+
+
+
+```
+The way nginx and its modules work is determined in the configuration file. By default, the configuration file is named nginx.conf and placed in the directory /usr/local/nginx/conf, /etc/nginx, or /usr/local/etc/nginx.
+```
+
+
+
+配置文件在不同操作系统中的位置可能有差异，这个是好多linux和unix的软件上的通常情况。
+
+
+
+Directives是组成nginx配置文件的基本单元.
+
+```
+Directives are divided into simple directives and block directives. A simple directive consists of the name and parameters separated by spaces and ends with a semicolon (`;`). A block directive has the same structure as a simple directive, but instead of the semicolon it ends with a set of additional instructions surrounded by braces (`{` and`}`). If a block directive can have other directives inside braces, it is called a context.
+```
+
+
+
+一看这么设计配置，那一定是有继承关系的，比如放在server中的root指令，那么其中的location会首先继承这个root指令，如果自己定义了新的root，那么才使用自己定义的root。
+
+
+
+[这篇新手指导](http://nginx.org/en/docs/beginners_guide.html)还是讲得很清楚的，基本的配置可以写出来，不需要去瞎抄网上的一些配置项了，慢慢添加自己需要的功能才能搞得明白每一个指令有啥用。设置静态页面应该大部分人都没啥问题，这里比较有意思的是配置代理服务器和fastcgi代理，其实就需要大概理解一下一个http服务器包含哪些部分和整个处理一次请求的流程是怎么样的。
+
+
+
+### nginx处理一次请求的过程
+
+如很多人所说nginx处理请求的模型和apache是不一样的，这也是nginx比apache性能更高的原因，但读了官方文档以后，我也才知道，nginx并不是我之前以为那样，整个程序运行于一个进程中，想了想，确实这样也不利于效率最大化。
+
+
+
+nginx有一个master process和可配置个数的worker process，master process主要负责加载配置和管理其他的worker process，而worker process主要负责处理实际的request请求。我估计实际生产环境中是运维同学根据机器的cpu和内存使用情况去配置worker的数量，这会涉及一些计算机硬件和操作系统知识，意淫一下。
+
+
+
+要真说request的请求过程，估计得从[这个文档](http://nginx.org/en/docs/stream/stream_processing.html)的阶段讲起，但那一部分我也真是还用不到而且理解不是很深，但我们都知道http是基于tcp的，所以我就暂且意淫为其中Content那一步，才是我们通常打交道的这一部分，这个时候我们拿到了http上行请求的所有数据，该根据这些数据来处理请求了。
+
+
+
+首先说nginx是可以配置多个虚拟server的，那么首先会根据http头中带的host参数，去选择某一个server，然后再根据域名之后path的部分去选择location，如果直接命中了某个静态文件，那么就把这个静态文件的内容作为response输出给请求方。大致是这样：
+
+```
+request->server->location->response
+```
+
+当然，这个流程是指nginx设计的概念上的，而不是实际的物理流程。
+
+
+
+如果是指定了代理的：
+
+```
+request->server->location->proxy_pass->server->location->response
+```
+
+
+
+这里比较有意思的是cgi这个概念，可能大部分搞客户端的同学都不是很懂，nginx和php到底是啥关系，总觉得服务器开发nginx和php是一个意思，其实http服务器和http服务器使用的语言，是完全两个不同的概念，理论上你可以用任意的语言来进行服务器开发，但都用nginx作为服务器，那么你如何和nginx交互呢，那就是得用到cgi或者fastcgi了。下面是知乎的一段解释，我觉得说得听明白的：
+
+``` 
+作者：lujjjh
+链接：http://www.zhihu.com/question/19582041/answer/23337307
+来源：知乎
+著作权归作者所有，转载请联系作者获得授权。
+
+我理解的 CGI 是狭义上的 CGI，即不包含 FastCGI。
+
+对一个 CGI 程序，做的工作其实只有：从环境变量(environment variables)和标准输入(standard input)中读取数据、处理数据、向标准输出(standard output)输出数据。
+
+环境变量中存储的叫 Request Meta-Variables，也就是诸如 QUERY_STRING、PATH_INFO 之类的东西，这些是由 Web Server 通过环境变量传递给 CGI 程序的，CGI 程序也是从环境变量中读取的。
+
+标准输入中存放的往往是用户通过 PUTS 或者 POST 提交的数据，这些数据也是由 Web Server 传过来的。
+
+就比如，我们刚学 C 语言时写的 Hello World，也可以作为一个合法的 CGI 程序。
+
+现在用 CGI 的已经很少了，因为每个 CGI 进程只处理一个请求，换句话说，每个请求都需要创建一个 CGI 进程处理，CGI 程序处理完毕后就退出了。
+
+FastCGI 正是对 CGI 的改进，而且改进了不是一点点。
+
+从总体上看，一个 FastCGI 进程可以处理若干请求（一般 FastCGI 进程是驻留着的，但不排除 IIS 之类的 Web Server 限制其空闲时间，在一段时间内没有请求就自动退出的可能），Web Server 或者 fpm 会控制 FastCGI 进程的数量。
+
+细节方面，FastCGI 是一套协议，不再是通过简单的环境变量、标准输入和标准输出来接收和传递数据了。一般来说，FastCGI 用 TCP 或者命名管道(Named Pipe)传输数据。
+
+现在绝大多数 PHP 网站都是在用 FastCGI 的。
+
+因此，这个问题的答案取决于题主对 CGI 的理解。
+```
+
+
+
+那么如果指定了fastcgi的server，比如php的，那么流程就是这样的：
+
+```
+request->server->fastcgi_pass->php-fpm->nginx->response
+```
+
+其中php-fpm就会运行php脚本，并把php处理以后的输出返回给nginx再返回给请求者。
+
+[这篇文档](http://nginx.org/en/docs/http/request_processing.html)更细节地结合nginx的配置文件地解释了nginx是如何处理一个请求的。
+
+
+
+### nginx做负载均衡
+
+我理解负载均衡主要是怕单个server处理不过来请求，所以通过nginx的代理功能，并辅助一定的分发策略，把请求代理给下游真正处理请求的server。一个简单负载均衡的配置文件:
+
+``` 
+http {
+    upstream myapp1 {
+        server srv1.example.com;
+        server srv2.example.com;
+        server srv3.example.com;
+    }
+
+    server {
+        listen 80;
+
+        location / {
+            proxy_pass http://myapp1;
+        }
+    }
+}
+```
+
+（不明白为啥这里下游的server被叫做upstream...）
+
+nginx支持三种分发策略和一个权重的参数配置，实际效果待验证，不知道和我读这段鸟文理解得一致不:
+
+``` 
+round-robin — requests to the application servers are distributed in a round-robin fashion,
+
+least-connected — next request is assigned to the server with the least number of active connections,
+
+ip-hash — a hash-function is used to determine what server should be selected for the next request (based on the client’s IP address).
+```
+
+
+
+### 其他
+
+* nginx官网有所有directives的说明文档
+* 服务端的开发习惯和客户端还是有蛮大差异的，客户端的人习惯运行起来看现象，但在服务端开发，应该非常清楚每个模块的日志文件在哪看，每个模块的状态如何检查，出问题以后就去看对应的日志文件，通常日志文件的输出，结合google，都能知道问题在哪
+* 我在实际搭server的时候遇到的坑：php5.3中要重启php-fpm，单纯的重启nginx不能使php.ini设置生效

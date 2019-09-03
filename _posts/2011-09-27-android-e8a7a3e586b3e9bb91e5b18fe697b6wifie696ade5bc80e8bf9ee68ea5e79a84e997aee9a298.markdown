@@ -1,0 +1,30 @@
+---
+author: who
+comments: true
+date: 2011-09-27 09:37:45+00:00
+layout: post
+slug: android-%e8%a7%a3%e5%86%b3%e9%bb%91%e5%b1%8f%e6%97%b6wifi%e6%96%ad%e5%bc%80%e8%bf%9e%e6%8e%a5%e7%9a%84%e9%97%ae%e9%a2%98
+title: Android 解决黑屏时wifi断开连接的问题
+wordpress_id: 135
+categories:
+- Android
+---
+
+也许是为了省电，有的手机会在手机黑屏的时候断开Wifi连接。这会可影响你的应用的某个功能。
+
+在程序中设置wifi的方式为：
+
+
+    
+    
+    Settings.System.putInt(context.getContentResolver(),Settings.System.WIFI_SLEEP_POLICY,
+    Settings.System.WIFI_SLEEP_POLICY_NEVER); 
+    
+
+
+
+
+这里，你还需要在manifest文件里面加入一个写入设置的权限：
+"android.permission.WRITE_SECURE_SETTINGS" 
+
+在一个public static final class Manifest.permission extends Object的类中包含所有系统权限。

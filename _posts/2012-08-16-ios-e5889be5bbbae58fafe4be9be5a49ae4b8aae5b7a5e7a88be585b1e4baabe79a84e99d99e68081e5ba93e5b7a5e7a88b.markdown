@@ -1,0 +1,38 @@
+---
+author: huji0624
+comments: true
+date: 2012-08-16 11:56:51+00:00
+layout: post
+slug: ios-%e5%88%9b%e5%bb%ba%e5%8f%af%e4%be%9b%e5%a4%9a%e4%b8%aa%e5%b7%a5%e7%a8%8b%e5%85%b1%e4%ba%ab%e7%9a%84%e9%9d%99%e6%80%81%e5%ba%93%e5%b7%a5%e7%a8%8b
+title: iOS 创建可供多个工程共享的静态库工程
+wordpress_id: 552
+categories:
+- iOS
+---
+
+在项目开发的时候经常会遇到这样的情况，你有多个版本，比如iPad版本，iPhone版本，其中大部分的功能和代码都是相同的，一部分代码需要针对各自的版本定制，这样你就需要把公共的部分提取出来做成一个类似静态库的共用代码。
+
+我所了解的，在Android中有库工程(Library Project)可以实现这种需求，也就是你把公共部分提取出来建立一个project并把它标注为库工程，然后你给不同版本再建立一个对应的工程，在其中link库工程，这样就可以使用库工程中的代码了。
+
+对此我调查了差不多一天的时间，在ios上如何实现类似的需求，对于创造reuseable的代码，我发现最多的解决方式就是创建static library，但是我自己尝试了各种办法创建一个可用的static library，总是失败，目前的进展基本上连header file都找不到，我也查找了各种创建static library的方法，但网上的教程早已过期，最新的xcode已经面目全非。我自己又各种尝试，最后发现可以了，但是发现非常麻烦，因为你每次都是把build以后的.a文件和.h头文件要打包放到一个位置，你自己的工程在引用之，每次你修改了库，就得手动去把库重新编译一次，如果增加了什么.h文件，又要把新的头文件链接过去。而且对应的相关资源文件貌似是不能通过这种方式搞的，要把资源搞进去，貌似就得把static library制作成framework。看stackoverflow上的回答，貌似apple目前不支持你自己制作framework，只能用github上的一个第三方工具，又是一堆概念，而且还是经常要编译来编译去的。
+
+最终，我在看一个开源项目的demo工程时，发现了一种满足我的需求的方式，但是这种方式对除了纯代码以外的东西比如资源不太支持（也可以通过创建bunddle实现，不过我觉得比较丑陋，继续研究）.
+
+我一部分非操作参照了[http://www.galloway.me.uk/tutorials/ios-library-with-resources/](http://www.galloway.me.uk/tutorials/ios-library-with-resources/)
+操作步骤：
+
+首先用Xcode建立一个static library工程，这个非常简单。这个工程就是用来编写共用代码的。代码写好以后build就是，不能run。
+
+然后在Finder中把对应的工程文件(.xcodeproj)拖到要使用该library的Framework中，貌似也可以不是Framework。表示你要链接这个工程。（另一中办法不需要整个工程，只需要。a文件和header files，这种办法在指定header file path的时候就可以完全自己定制了。）
+
+这时你在app工程的buildphasees 的 link binary with library中点击＋号时，就可以在workspace中看到对应的.a结尾的library了。
+
+这时候就需要引入library的header files了。有两种方式，一种是在你的库工程中的buildphase中增加copyfiles，把头文件包含进去，然后在app工程中的build setting的search path的header file path中写为${BUILD_PRO_DIR}（大概是这个，详见上面的文章），一种方式是指定你的库工程的路径为header file path，这时也能找到对应的header files。
+
+最后在app工程中，import对应的header file就可以使用对应的类文件了。
+
+（这里可以学学系统framework中的方式，把头文件的import全放到一个.h中，然后import这一个就相当于引入了所有的header file，比如#import ）
+
+（这样的直接引用库工程的方式的好处是，每次你修改了库工程，包括新增文件，修改代码，库工程也会在一起编译，相应的头文件在app工程中也是保持最新的版本，因为是直接指定的路径链接嘛，这样就不用麻烦地每次都要重新编译和修改相应的库和头文件)
+
+另外，我发现在使用静态库得时候，如果库中有category的话，在运行时会有no such selector的错误，[http://developer.apple.com/library/mac/#qa/qa1490/_index.html](http://developer.apple.com/library/mac/#qa/qa1490/_index.html)，苹果官方的这篇文章给出了解释和解决办法.

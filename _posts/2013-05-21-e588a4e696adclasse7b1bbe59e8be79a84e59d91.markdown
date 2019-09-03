@@ -1,0 +1,42 @@
+---
+author: huji0624
+comments: true
+date: 2013-05-21 16:27:42+00:00
+layout: post
+slug: '%e5%88%a4%e6%96%adclass%e7%b1%bb%e5%9e%8b%e7%9a%84%e5%9d%91'
+title: 判断class类型的坑
+wordpress_id: 674
+categories:
+- Objective-C
+---
+
+在oc中，我们有时候免不了会根据取得实例类型来做不同的处理，一般常用的方法有一下三种：
+1.[NSStringFromClass([instance class]) isEquelTo:NSStringFromClass([SomeClass class])]
+2.[instance isKindofClass:[SomeClass class]]
+3.[instance isMemberofClass:[SomeClass class]]
+
+一般情况下,我对这三种方式的理解和用都是正确的，但是到了某些特定的类上，就有些不一样了。
+
+目前我发现有三个特例:
+NSNumber
+NSValue
+NSString
+
+首先，对于某个实例的class调用NSStringFromClass方法，得到的都是很特殊的值：
+
+_ NSNumber NSValue NSString
+__NSCFNumber NSConcreteValue __NSCFString_
+
+其次，isMemberofClass方法不管用了！
+以NSNumber为例,对于:
+NSNumber *instance = [NSNumber numberWithInt:10];
+[instance isMemberofClass:[NSNumber class]]的返回值是NO
+[instance isKindofClass:[NSNumber class]]的返回值是YES
+
+虽然numberof在接口中返回的是一个NSNumber对象，但实际上却不是，看起来像是一个实现时定义的内部对象，而且是继承自NSNumber。再仔细考虑了一下，发现这三个类所代表的都是属于基本类型范围的，我猜测有可能是对效率上的考虑，或者是为了实现OC那个xx bridge的考虑。这里目前还是理解得不够深刻，没太看明白这种涉及的思想，慢慢研究。
+
+
+
+-----------
+===============
+后来才发现其实是oc类族的设计.2015.03.03.

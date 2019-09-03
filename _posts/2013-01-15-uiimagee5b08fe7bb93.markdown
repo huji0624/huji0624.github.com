@@ -1,0 +1,91 @@
+---
+author: huji0624
+comments: true
+date: 2013-01-15 06:47:49+00:00
+layout: post
+slug: uiimage%e5%b0%8f%e7%bb%93
+title: UIImage小结
+wordpress_id: 645
+categories:
+- iOS
+---
+
+ios中的UIImage是比较常用的一个类，主要用表示图片资源。
+
+对于一般使用，可能不会出现什么问题，但是如果你需要经常用CoreGraphics自己来画图片，可能有时候就会被UIImage搞得晕头转向的。
+
+关于UIImage，我觉得最重要的两点搞明白就能搞清楚大部分问题了。
+1.在内存中UIImage是如何存储图片数据的。
+2.UIImage的imageorientation属性的影响。
+
+我们用这么一段代码来测试UIImage到底是怎么回事.test是一个3x3有9个像素的图片.这里我做了比较简化的处理，认为他就是一个Component为RGBA的图片.
+
+    
+    
+    - (void)viewDidLoad
+    {
+    	[super viewDidLoad];
+    	// Do any additional setup after loading the view, typically from a nib.
+    
+    	UIImage *image = [UIImage imageNamed:@"test"];
+    	[self logImage:image];
+    	self.imageViewUp.image=image;
+    
+    	UIImage *imagedown = [UIImage imageWithCGImage:image.CGImage scale:1.0f orientation:UIImageOrientationDown];
+    	[self logImage:imagedown];
+    	self.imageViewDown.image=imagedown;
+    }
+    
+    -(void)logImage:(UIImage*)image{
+    	CGDataProviderRef provider = CGImageGetDataProvider(image.CGImage);
+    	char *data =(char*) CFDataGetBytePtr(CGDataProviderCopyData(provider));
+    	int width = image.size.width;
+    	int hei = image.size.height;
+    
+    	NSLog(@"w=%d h=%d p=%p ori=%d",width,hei,data,image.imageOrientation);
+    
+    	for (int i =0 ; i<width*hei*4; i=i+4) {
+    		NSLog(@"RGB(%0x,%0x,%0x) alpha=%d",*(data+i),*(data+i+1),*(data+i+2),*(data+i+3));
+    	}
+    
+    	NSLog(@"----------");
+    }
+    
+
+
+
+打印出来的日志如下:
+2013-01-15 12:52:00.339 iPadDemo[98767:11303] w=3 h=3 p=0x909a100 ori=0
+2013-01-15 12:52:00.340 iPadDemo[98767:11303] RGB(0,0,0) alpha=-1
+2013-01-15 12:52:00.340 iPadDemo[98767:11303] RGB(ffffffff,ffffffff,ffffffff) alpha=-1
+2013-01-15 12:52:00.341 iPadDemo[98767:11303] RGB(ffffffff,0,0) alpha=-1
+2013-01-15 12:52:00.341 iPadDemo[98767:11303] RGB(0,ffffffff,0) alpha=-1
+2013-01-15 12:52:00.342 iPadDemo[98767:11303] RGB(ffffffff,fffffff0,0) alpha=-1
+2013-01-15 12:52:00.342 iPadDemo[98767:11303] RGB(18,0,ffffffff) alpha=-1
+2013-01-15 12:52:00.342 iPadDemo[98767:11303] RGB(ffffffea,0,ffffffff) alpha=-1
+2013-01-15 12:52:00.343 iPadDemo[98767:11303] RGB(0,ffffffff,ffffffe4) alpha=-1
+2013-01-15 12:52:00.343 iPadDemo[98767:11303] RGB(ffffffff,ffffffa2,0) alpha=-1
+2013-01-15 12:52:00.344 iPadDemo[98767:11303] ----------
+2013-01-15 12:52:00.344 iPadDemo[98767:11303] w=3 h=3 p=0x909a180 ori=1
+2013-01-15 12:52:00.344 iPadDemo[98767:11303] RGB(0,0,0) alpha=-1
+2013-01-15 12:52:00.345 iPadDemo[98767:11303] RGB(ffffffff,ffffffff,ffffffff) alpha=-1
+2013-01-15 12:52:00.345 iPadDemo[98767:11303] RGB(ffffffff,0,0) alpha=-1
+2013-01-15 12:52:00.348 iPadDemo[98767:11303] RGB(0,ffffffff,0) alpha=-1
+2013-01-15 12:52:00.349 iPadDemo[98767:11303] RGB(ffffffff,fffffff0,0) alpha=-1
+2013-01-15 12:52:00.349 iPadDemo[98767:11303] RGB(18,0,ffffffff) alpha=-1
+2013-01-15 12:52:00.350 iPadDemo[98767:11303] RGB(ffffffea,0,ffffffff) alpha=-1
+2013-01-15 12:52:00.350 iPadDemo[98767:11303] RGB(0,ffffffff,ffffffe4) alpha=-1
+2013-01-15 12:52:00.351 iPadDemo[98767:11303] RGB(ffffffff,ffffffa2,0) alpha=-1
+2013-01-15 12:52:00.351 iPadDemo[98767:11303] ----------
+
+在imageViewUp中显示的图像：
+[![up](http://www.whoslab.me/blog/wp-content/uploads/2013/01/up.png)](http://www.whoslab.me/blog/?attachment_id=647)
+在imageViewDown中显示的图像：
+[![down](http://www.whoslab.me/blog/wp-content/uploads/2013/01/down.png)](http://www.whoslab.me/blog/?attachment_id=646)
+
+从这些信息中我们可以看出：
+1.图片数据在UIImage中是以从左到右，从上到下的方式存储像素点数据的。
+2.当你用不同的Oritation创建新的UIImage的时候，像素点存储数据的方式是没有改变的，那么也就是说，UIImageView其实只是根据imageOrientation的值在显示时，对UIImage做了变换。
+3.imageWithCGImage方法复制了一份新的CGImage数据。
+4.当你使用CGImage的时候，你几乎可以不用考虑imageOrientation的影响。
+

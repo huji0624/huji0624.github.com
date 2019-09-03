@@ -1,0 +1,56 @@
+---
+author: huji0624
+comments: true
+date: 2012-01-07 10:34:06+00:00
+layout: post
+slug: java-clone%e6%96%b9%e6%b3%95%ef%bc%8c%e7%9c%9f%e4%b8%8d%e6%98%af%e6%88%91%e6%83%b3%e7%9a%84%e9%82%a3%e4%b9%88%e7%94%a8
+title: Java clone()方法，真不是我想的那么用.
+wordpress_id: 352
+categories:
+- JAVA
+---
+
+今天总算吃了一次没搞清楚某个方法的原理就乱用的亏。
+
+情景：用某个对象数组的clone方法复制一个对象数组的副本进行处理（因为先看了api说是创建一个副本，就觉得应该是那样吧），程序很庞大，调试了半天，老出现一些奇怪的错误，百思不得其解，一直追踪下去，才开始怀疑是自己对这个colne方法的理解有错误（或者说api没说清楚...）。于是写了几个demo测试了下，才发现自己想得 too simple。
+
+    
+    class TNumber {
+    	int num=0;
+    }
+    
+    public static void main(String[] args) {
+    		TNumber[] n={new TNumber()};
+    		print(n[0].num);
+    		print(n);
+    		print(n[0]);
+    
+    		TNumber[] anothern=n.clone();
+    		anothern[0].num=1;
+    
+    		print(n[0].num);
+    		print(anothern);
+    		print(anothern[0]);
+    	}
+    
+    public static  void  print(T t){
+    	System.out.println(t);
+    }
+
+
+输出如下：
+
+0
+[Lcom.test.TNumber;@7c6768
+com.test.TNumber@1690726
+1
+[Lcom.test.TNumber;@5483cd
+com.test.TNumber@1690726
+
+从输出可见，自以为是在对副本进行操作，但改变了原数组中的值，通过打印显示对象数组的hash值确实不同，clone的时候是真创建了一个新的对象，而不是本身的引用，但对象数组其中的对象的hash值完全相同，那你操作数组肿的对象的时候就自然改变了原数组的值。
+
+找了半天，才找到[一篇比较靠谱的文章](http://www.blogjava.net/orangelizq/archive/2007/10/17/153573.html)，介绍了java clone的东西。
+
+今后要写自己不清楚的代码的时候，最好先写个demo测试下，不然会浪费更多时间。
+
+另外在java中没有指针的概念，在操作一个对象的引用的时候一定要注意是否会改变原对象的值，如果会改变原对象的话，是否需要创建一个副本，如果需要，就要使用合适的方法来创建副本对象。

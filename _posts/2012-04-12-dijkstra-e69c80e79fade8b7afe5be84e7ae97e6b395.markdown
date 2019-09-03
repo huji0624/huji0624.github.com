@@ -1,0 +1,210 @@
+---
+author: huji0624
+comments: true
+date: 2012-04-12 15:58:58+00:00
+layout: post
+slug: dijkstra-%e6%9c%80%e7%9f%ad%e8%b7%af%e5%be%84%e7%ae%97%e6%b3%95
+title: Dijkstra 最短路径算法
+wordpress_id: 434
+categories:
+- 算法
+---
+
+一直不怎么学过算法，因为很少用到，最近帮一个同学搞定作业，研究了一下路由最短算法的Dijkstra算法。
+
+节点拓扑图：
+[![](http://www.whoslab.me/blog/wp-content/uploads/2012/04/Screenshot-at-2012-04-12-195839.png)](http://www.whoslab.me/blog/wp-content/uploads/2012/04/Screenshot-at-2012-04-12-195839.png)
+
+代码：
+
+    
+    
+    public class Dijkstra {
+    	
+    		
+    	static final Node node1=new Node(1);
+    	static final Node node2=new Node(2);
+    	static final Node node3=new Node(3);
+    	static final Node node4=new Node(4);
+    	static final Node node6=new Node(6);
+    	static final Node node7=new Node(7);
+    	
+    	static final Node mSource=new Node(5);
+    	
+    	static final ArrayList<node> S=new ArrayList<dijkstra.node>();
+    	
+    	static {
+    		mSource.addD(node1, 9);
+    		mSource.addD(node2, 6);
+    		mSource.addR(node1);
+    		mSource.addR(node2);
+    		
+    		node1.addD(mSource, 9);
+    		node1.addR(mSource);
+    		
+    		node2.addD(mSource, 6);
+    		node2.addD(node6, 8);
+    		node2.addD(node3, 3);
+    		node2.addR(mSource);
+    		node2.addR(node6);
+    		node2.addR(node3);
+    		
+    		node3.addD(node2, 3);
+    		node3.addD(node6, 2);
+    		node3.addD(node4, 11);
+    		node3.addR(node2);
+    		node3.addR(node6);
+    		node3.addR(node4);
+    		
+    		node4.addD(node3, 11);
+    		node4.addD(node7, 3);
+    		node4.addR(node3);
+    		node4.addR(node7);
+    		
+    		node6.addD(node2, 8);
+    		node6.addD(node3, 2);
+    		node6.addD(node7, 5);
+    		node6.addR(node2);
+    		node6.addR(node3);
+    		node6.addR(node7);
+    		
+    		node7.addD(node4, 3);
+    		node7.addD(node6, 5);
+    		node7.addR(node4);
+    		node7.addR(node6);
+    		
+    		S.add(node1);
+    		S.add(node2);
+    		S.add(node3);
+    		S.add(node4);
+    		S.add(node6);
+    		S.add(node7);
+    	}
+    	
+    	public void count(){
+    		
+    		while(S.size()!=0){
+    			
+    			int dis=mSource.D(S.get(0));
+    			int index=0;
+    			
+    			for(int i=0;i<S.size();i++){
+    				int d=mSource.D(S.get(i));
+    				if(d<dis&&d;>0){
+    					dis=d;
+    					index=i;
+    				}
+    			}
+    			
+    			if(dis<0){
+    				print("没有最短路径.退出...");
+    				return;
+    			}
+    			
+    			Node u=S.get(index);
+    			S.remove(index);
+    			
+    			//取得所有相邻节点
+    			HashMap<Node, Node> r=u.getR();
+    			Iterator<node> it=r.keySet().iterator();
+    			while(it.hasNext()){
+    				Node v=it.next();
+    				if(S.contains(v)){
+    					int c=u.D(v)+mSource.D(u);
+    					int sv=mSource.D(v);
+    					if(sv==-1||c<mSource.D(v)){
+    						mSource.getR().remove(u);
+    						mSource.addR(v);
+    						
+    						mSource.addD(v, c);
+    						
+    						print("找到了新的最短距离，从节点 "+mSource+"到 "+v+" 最短距离为 "+c);
+    					}
+    				}
+    			}
+    			
+    		}
+    		
+    	}
+    	
+    	public static <t> void  print(T t){
+    		System.out.println(t);
+    	}
+    	
+    	static class Node{
+    		
+    		private int value;
+    		
+    		private HashMap<Node, Integer> D=new HashMap<Dijkstra.Node, Integer>(); 
+    		private HashMap<Node, Node> R=new HashMap<Dijkstra.Node, Node>();
+    		
+    		public Node(int value){
+    			this.value=value;
+    		}
+    		
+    		public int getValue(){
+    			return value;
+    		}
+    		
+    		public int D(Node i){
+    			if(!D.containsKey(i)){
+    				return -1;
+    			}
+    			
+    			return D.get(i);
+    		}
+    		
+    		public void addD(Node i,int weight){
+    			D.put(i, weight);
+    		}
+    		
+    		public Node R(Node v){
+    			
+    			if(!R.containsKey(v)){
+    				return new Node(0);
+    			}
+    			
+    			return R.get(v);
+    		}
+    		
+    		public void addR(Node v){
+    			R.put(v, this);
+    		}
+    		
+    		public HashMap<Node, Node> getR(){
+    			return R;
+    		}
+    		
+    		@Override
+    		public int hashCode() {
+    			return value;
+    		}
+    		
+    		@Override
+    		public String toString() {
+    			return ""+value;
+    		}
+    	}
+    	
+    }
+    
+    
+
+
+
+从非标准程序员的角度理解了一下，要求从某个源节点到某个节点的最短路径，就是利用已知的最短路径的节点，去递归地推导出未知最短路径的节点。最后求得从源节点到整个网络的最短路径。
+
+如图所示，源节点为5，123467都是未知最短路径的节点，然后从相邻边开始，整个过程为：
+
+1.求得到节点2的最短路径为6.2为已知点。
+2.求得到节点1的最短路径为9.1为已知点。
+3.求得到节点3的最短路径为9.3为已知点。
+4.求得到节点6的最短路径为14，但节点6还是未知节点，因为还有另外一条路径没有计算。
+5.求得到节点6的最短路径为11,6为已知点。
+6.求得到节点4的最短路径为20，但节点4还是未知节点，因为还有另外一条路径没有计算。
+7.求得到节点7的最短路径为16,7为已知点。
+8.求得到节点4的最短路径为19,4为已知点。
+
+整个网络求解完成。
+
+据说Dijkstra是一种贪婪算法，有他的局限性，有机会了解下贪婪算法，经常听说这个名词。

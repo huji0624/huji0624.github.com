@@ -1,0 +1,62 @@
+---
+author: who
+comments: true
+date: 2011-09-30 07:40:59+00:00
+layout: post
+slug: '%e4%bd%bf%e7%94%a8timer%e5%92%8ctimertask%e5%ae%9e%e7%8e%b0%e7%81%b5%e6%b4%bb%e7%9a%84%e6%8e%a8%e9%80%81%e6%96%b9%e6%a1%88'
+title: 使用Timer和TimerTask实现灵活的推送方案
+wordpress_id: 140
+categories:
+- Android
+- JAVA
+---
+
+
+
+我没有调研过一般推送都是怎么弄，只是大概知道，有人采用轮询的方式，客户端不断询问服务端是否有推送消息，有就接受消息，没有就继续在一定的延迟后再询问。
+
+Java中使用Timer和TimerTask就可以实现这样的轮询，大略代码如下。
+
+    
+    public class Test {
+    
+    Timer timer=new Timer();
+    
+    public static void main(String[] args) throws Exception {
+    Test t=new Test();
+    t.start(1000);
+    }
+    
+    public void start(long time){
+    this.timer.schedule(new TextTimer(), time);
+    }
+    
+    public class TextTimer extends TimerTask{
+    
+    @Override
+    public void run() {
+    // TODO Auto-generated method stub
+    print("texttimer-run()");
+    try {
+    Thread.sleep(3000);
+    } catch (InterruptedException e) {
+    // TODO Auto-generated catch block
+    e.printStackTrace();
+    }
+    //the time is response from the server
+    if(false) start(time);
+    else dosomething;
+    
+    }
+    }
+    
+    }
+
+
+
+
+``
+<!-- more -->
+用Timer启动一个任务以后，在任务中向服务器问询，如果没有就再次启动，有就先进行相关的工作，再启动。这里有一个比较好的方式，在像服务器询问时，都会返回一个时间，这个时间是下次启动这个任务的时间，这样就可以通过设置服务器端的参数来控制问询的间隔。另外在处理时，可以通过catch不同的异常，来进行不同的时间间隔的重启任务，比如如果是没有网络就5分钟后重启。
+
+在android中，可以使用这种Timer的方式，我发现，还可以使用Alarm Service加上AlarmManager，也可以达到这样的效果，具体优劣我没有对比。我猜想采用Alarm的方式可以更节省资源。

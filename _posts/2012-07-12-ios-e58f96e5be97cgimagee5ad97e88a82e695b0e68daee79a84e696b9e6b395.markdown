@@ -1,0 +1,79 @@
+---
+author: huji0624
+comments: true
+date: 2012-07-12 03:57:00+00:00
+layout: post
+slug: ios-%e5%8f%96%e5%be%97cgimage%e5%ad%97%e8%8a%82%e6%95%b0%e6%8d%ae%e7%9a%84%e6%96%b9%e6%b3%95
+title: iOS 取得CGimage字节数据的方法
+wordpress_id: 539
+categories:
+- iOS
+---
+
+一直没在sdk的api中发现有比较简便直观的取得CGimage字节数据的方法，自己曾经在这上面来来去去花了不少时间，有时实现了，但没有做相关总结，下次使用时又忘记，又重新捣鼓一遍，浪费经历和时间。
+
+通过我在网上搜索和总结，目前看来，我发现两种比较方便的方式。
+
+1. CGImage -> CGDataProvider -> CFData -> xx *
+
+
+    
+    
+        CGDataProviderRef provider = CGImageGetDataProvider(CGImage);
+        void *data =(void*) CFDataGetBytePtr(CGDataProviderCopyData(provider));
+    
+
+
+
+这样得到的就是void*类型的数据.
+
+2. CGImage -> CGContext -> void *
+
+
+    
+    
+         int sWidth=CGImageGetWidth(CGImage);
+        int sHeight=CGImageGetHeight(CGImage);
+        CGImageRef mContent = CGImage;
+        CGContextRef context = CGBitmapContextCreate(NULL, CGImageGetWidth(mContent), CGImageGetHeight(mContent), 
+                                         CGImageGetBitsPerComponent(mContent), CGImageGetBytesPerRow(mContent), 
+                                         CGImageGetColorSpace(mContent), CGImageGetBitmapInfo(mContent));
+        CGContextDrawImage(context, CGRectMake(0, 0, sWidth, sHeight), mContent);
+        
+        void *data=CGBitmapContextGetData(context);
+    
+
+
+
+另外我在stackOverFlow上看到大家的讨论中，对取得的字节数据每四位做了一个求余运算并都转换成了UIcolor，暂时不是很清楚为什么要这样做。
+
+当得到CGimage的字节数据，有时又需要把它转化成UIImage.
+
+我目前的做法是:
+
+    
+    
+        void *data;
+        CGDataProviderRef pv=CGDataProviderCreateWithData(data, data, sWidth*sHeight*4, ContentReleaseCallBack);    
+        CGImageRef content=CGImageCreate(sWidth , sHeight, 8, 32, 4*sWidth, 
+                                         CGColorSpaceCreateDeviceRGB(), kCGBitmapByteOrder32Big | kCGImageAlphaNoneSkipLast, 
+                                         pv, NULL, true, kCGRenderingIntentDefault);
+        UIImage *ci = [UIImage imageWithCGImage:content];
+    
+
+
+
+我测试过以上一套方法，能正常显示图像，只是在alpha的值上和原图有些不一样转成字节数据再转换成UIImage以后，原本是透明的部分变成了黑色，目前我还没有深入去找出原因，但大概的问题可能猜得到.
+
+我也尝试过用
+
+
+    
+    
+    UIImage *ci = [UIImage imageWithData:[NSData dataWithBytes:data length:sWidth*sHeight*4]];
+    
+
+
+
+来转化字节数据到UIImage，但这个方法一直没有成功，原因还没搞懂。
+

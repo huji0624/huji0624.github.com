@@ -1,0 +1,85 @@
+---
+author: huji0624
+comments: true
+date: 2014-02-21 09:52:04+00:00
+layout: post
+slug: vba%e8%af%95%e7%94%a8%e6%84%9f%e5%8f%97
+title: vba试用感受
+wordpress_id: 718
+categories:
+- 其他
+---
+
+技术上很少试用过微软的东西，最近项目上有个很蛋疼的事情交给我搞，不得不用到一下vba来自动生成excel，花了30分钟研究了一下怎么写代码，然后搞定收工。
+
+先贴一段代码:
+
+    
+    
+    Sub finalkey()
+        Dim index
+        index = 3
+    	desindex = 2
+        
+        Dim pg,pgc
+        
+        Do While index < MaxItemIndex
+            
+             Sheets("item").Select
+             Dim itemc,item
+             
+             If Range("A" & index) <> "" Then
+                 pg = Range("A" & index)
+                 pgc = Range("B" & index)
+             End If
+             
+             item = Range("C" & index)
+             itemc = Range("D" & index)
+             
+             If item <> "" Then
+                 Sheets("key").Select
+                 Range("A" & desindex) = app
+                 Range("B" & desindex) = os
+                 Range("C" & desindex) = sv
+                 Range("D" & desindex) = pg + "." + item
+                 Range("E" & desindex) = pgc + "," + itemc
+    			 desindex = desindex + 1
+             End If
+         
+    	 	index = index + 1
+         Loop
+    
+    	 index = 2
+    	 Do While index < MaxOthersIndex
+    
+    	 	Sheets("others").Select
+    		Dim key,info
+    
+    		key = Range("A" & index)
+    		info = Range("B" & index)
+    
+    		If key <> "" Then
+    			Sheets("key").Select
+                Range("A" & desindex) = app
+                Range("B" & desindex) = os
+                Range("C" & desindex) = sv
+    			Range("D" & desindex) = key
+    			Range("E" & desindex) = info
+    			desindex = desindex + 1
+    		End If
+    
+    		index = index + 1
+    	Loop
+     
+    End Sub
+    
+
+
+
+这段代码（不完整）的主要作用是把一张表的内容进行拼接以后，复制到另外一张表。
+
+从常规的计算机思维来说，代码基本上就是数据和算法的集合，所以一般类似的需求都是从数据入手，然后以一定的算法合并数据。可以说是面向数据和算法的编程。
+
+在我使用了vba以后，我把vba的编程思维归结为面向行为的编程，就是指你不需要去了解原本的数据和算法，你只需要清楚地知道你用什么行为可以得到想要的结果，然后编写这一系列行为的指令。我感觉对于非计算机专业人员非常适合这种思维模式，因为通常来说，一般人都更能理解自己能看能用的东西。
+
+如果能解决效率问题，未来说不定有更高级的面向行为编程的方式吗?

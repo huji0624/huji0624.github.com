@@ -1,0 +1,56 @@
+---
+author: who
+comments: true
+date: 2011-08-01 11:50:51+00:00
+layout: post
+slug: '%e7%bb%9d%e5%af%b9%e4%b8%8d%e8%a6%81%e4%bd%bf%e7%94%a8java-7'
+title: 绝对不要使用Java 7
+wordpress_id: 77
+categories:
+- 翻译外文
+---
+
+_本文翻译自 [Don't use Java 7 for anything.](http://www.lucidimagination.com/blog/2011/07/28/dont-use-java-7-for-anything/)如需转载请注明出处。刚开始尝试翻译，请多多指正。_
+
+今天，Java 7的通用版本发布了，但是Uwe Schindler 指出，在被默认的热循环优化中，存在一些非常恐怖的bug。在最好的情况下，这些bug导致JVM崩溃。最坏的情况，会让循环错误执行。（也许这样的情况会很难发现这样的bug让程序员崩溃并且浪费很多时间----译者注）
+
+基本准则是：绝对不要使用Java 7（除非你或许你知道在你的Java代码里面不包含任何循环）
+
+以下是Uwe Schindler的文章。
+
+来自：乌韦辛德勒
+日期：周四，2011年七月28日23点13分36秒0200
+主题：[警告]Index corruption and crashes in Apache Lucene Core / Apache Solr with Java 7
+
+你好，Apache Lucene 和 Apache Solr的用户们，以及其他基于Java的阿帕奇项目的用户们，今天Oracle发布了Java 7。很不幸的是，它包含HotsPot编译器优化，而这些优化把一些循环错误编译了。这可能会影响一些阿帕奇项目的代码。有时只是JVMs发生崩溃，但在某些情况下，计算结果会发生错误，这会直接导致应用程序出现bug。
+
+_ _
+
+_(see Hotspot bugs 7070134 [1], 7044738 [2], 7068051 [3])_
+
+Apache Lucene Core和 Apache Solr两个阿帕奇项目知道今天发布的所有版本都受到了这些bug的影响。用户一但启动索引文件，采用默认设置的Solr用户会由于SIGSEGV错误发生Java崩溃，其中受影响的一个部分是著名的Porter Stemmer（一个预处理英文的开源程序）。在Lucene中的其他循环也可能被错误地编译了，这会导致Index corruption（某种错误，目前我不知道怎么翻译...这篇文章对我来说好像有点难）（尤其是Lucene主程序的pulsing codec；其他的循环也可能被影响）
+
+这些问题仅仅在Java 7的官方版本发布前5填才被察觉到，所以Oracle根本没有时间来修复这些影响了很多应用程序的bug。根据我们的问题，他们提出把修复bug的事情放到服务器版本u2（最终他们同意了放到u1中，参见【6】）。这意味着在U2之前你都不能使用Java 7的Apache Lucene/Solr。如果你这样做，请不要打开错误报告，那不是committer的错。至少使用-XX:-UseLoopPredicate JVM选项来关闭循环优化来避免冒险出现index corruption。
+
+请注意：如果使用JVM选项的其中一只，Java 6用户也会受到影响，而且那些选项不是默认关闭的。_ _
+
+
+_-XX:+OptimizeStringConcat or _
+
+
+
+
+-XX:+AggressiveOpt
+
+
+
+
+
+
+
+
+强烈推荐在没有得到进一步测试的情况下，不要在任何Java版本中使用任何HotPot优化开关。
+
+万一你要是一不小心升级到了Java 7，请记住你也许不得不reindex（某种操作吧^^），作为Java 7附带Unicode版本的改变和标记不同（比如小写）。想了解更多信息，请阅读在你的分发包中的JRE_VERSION_MIGRATION.txt文件 。
+
+Lucene项目代表，Uwe

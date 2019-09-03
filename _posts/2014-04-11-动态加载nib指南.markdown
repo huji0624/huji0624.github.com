@@ -1,0 +1,36 @@
+---
+author: huji0624
+date: 2014-04-11 13:38:58+00:00
+layout: post
+slug: '动态加载nib指南'
+title: 动态加载nib指南
+categories:
+- iOS
+---
+
+通常情况下，是不会遇到加载nib的问题的，xib在资源目录中，编译时xib被编译成nib，然后通过诸如initWithNibName:bundle的方法以某个nib初始化一个UIViewController.这是最常用的方式。
+
+如果你的nib文件是通过网络下载到Document目录下，那就需要动态地加载nib。
+
+1.常用方法
+
+	[UINib nibWithNibName:name bundle:bundle]
+	[UINib nibWithData:data bundle:bundle]
+	[NSBundle loadNibNamed:name owner:owner options:options]
+
+经过实践发现，[UINib nibWithData:data bundle:bundle]在目前版本来说，通用性较差，因为对于xib文件，如果你只支持一个版本的ios，那么nib文件就是一个二进制文件，很容可以通过[NSData dataWithContentOfFile:path]方式获取该文件的内容，然后通过这个接口初始化，但是通常需要支持多版本，也就是在xib文件中设置build for x.x.x and later，这时会发现生成的nib文件是一个目录，其中又包含一个objcts.nib和runtime.nib文件，具体不清楚应该怎么使用这两个nib文件（我尝试利用runtime.nib来初始化nib，没有什么大问题，但不是很放心，因为不清楚apple的具体实现是怎么做的），而且很难保持向后兼容。
+
+所以利用NSBundle来加载nib是比较好的选择.
+
+2.NSBundle使用
+
+在iOS中，bundle的实体其实就是一个目录，对应用程序统一都封装成NSBundle，bundle内部其实是没有任何配置文件的，实例化一个bundle可以通过[NSBundle bundleWithPath:path]接口，但是对于bundle来说，是无视目录的内部结构的，也就是说当你指定的资源在bundle内部有目录结构，那你需要指出他的相对路径。
+
+	[UINib nibWithNibName:name bundle:bundle]
+	[NSBundle loadNibNamed:name owner:owner options:options]
+
+那么对于这两个接口来说，你传入的bundle的路径必须是该资源所在目录，因为bundle都不会递归地去找的，这也比较好理解，因为有些资源本身就是目录结构的，bundle本身是不清楚你的这个资源到底是目录本身还是目录里面的某个文件.
+
+3.xib中的资源
+
+对于在xib中使用的资源，比如一个UIImageView使用的image，只是指定了一个图片的名字xxx.png，对于xib本身，是不知道到哪个bundle中去找的，xcode在绘制xib的时候，是到mainBundle中去找的，但是在程序加载的时候，应该是默认你的nib文件和图片资源在同一个bundle中。

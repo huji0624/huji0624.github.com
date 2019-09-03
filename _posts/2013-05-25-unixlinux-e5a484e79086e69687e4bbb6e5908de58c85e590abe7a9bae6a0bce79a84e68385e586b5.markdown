@@ -1,0 +1,71 @@
+---
+author: huji0624
+comments: true
+date: 2013-05-25 04:56:53+00:00
+layout: post
+slug: unixlinux-%e5%a4%84%e7%90%86%e6%96%87%e4%bb%b6%e5%90%8d%e5%8c%85%e5%90%ab%e7%a9%ba%e6%a0%bc%e7%9a%84%e6%83%85%e5%86%b5
+title: unix/linux 处理文件名包含空格的情况
+wordpress_id: 671
+categories:
+- Linux
+---
+
+在unix/linux中用命令行处理带空格的文件时，经常会出现各种错误，这里你首先要理解unix shell当中一个ifs的概念，对于非ifs的非文本字符，for循环及其他某些命令，会根据ifs来把你的这个输出分割成多个输出参数，所以当你的文件名包含空格时，可能会发生的情况就是你的文件名被分割成了多个参数传给命令，结果就是找不到文件。
+
+为了解决这个问题，可以利用临时改变ifs的方式，来取得完整的文件名
+
+比如:
+old=$IFS;
+IFS=$'\n';
+#其他你想执行的命令
+IFS=$old
+
+这时候，shell会按照换行符来截断你的命令，举个我使用的具体例子：
+
+old=$IFS;
+IFS=$'\n';
+for item in `find $archivedir -name "Iphone.app.dSYM"`;
+do dwo=`echo ${item//" "/"\ "}|xargs dwarfdump -u`;echo $dwo >> tmpout;
+done;
+IFS=$old
+
+找出某个目录下所有特定名字的文件，如果不修改ifs会发生什么事情呢，系统会把find找到的路径，在for中，按ifs分割成一个个参数传给item，那你文件名包含空格的文件就悲剧了。
+
+这里还有一点需要注意，也是坑了我很久的，为了把带空格的文件名传给其他命令，我当时觉得需要处理一下find查找到的文件路径，利用${}把空格替换转义一下，但是，如果你直接把替换转义的文本传给下一个命令作为文件路径参数的话，你就悲剧了，他很可能会报找不到该文件的错误，但你的路径看起来又明明是正确的，你看不出有任何问题,比如：
+
+dwarfdump -u 'Iphone\ 13-4-13\ 上午1.19.xcarchive/dSYMs/Iphone.app.dSYM/'
+warning: unsupported file type: 'Iphone\ 13-4-13\ 上午1.19.xcarchive/dSYMs/Iphone.app.dSYM/'
+
+所以正确的做法其实有一下两种，看出来区别了吧，总之一句话，都是想把路径作为一个不被分割的整体传递给下一个命令:
+
+
+    
+    
+    dwarfdump -u 'Iphone 13-4-13 上午1.19.xcarchive/dSYMs/Iphone.app.dSYM/'
+    UUID: E68E8A63-32F7-3852-BE13-6ACBFE9FBFFE (armv7) Iphone 13-4-13 上午1.19.xcarchive/dSYMs/Iphone.app.dSYM/Contents/Resources/DWARF/Iphone
+    
+    dwarfdump -u Iphone\ 13-4-13\ 上午1.19.xcarchive/dSYMs/Iphone.app.dSYM/
+    UUID: E68E8A63-32F7-3852-BE13-6ACBFE9FBFFE (armv7) Iphone 13-4-13 上午1.19.xcarchive/dSYMs/Iphone.app.dSYM/Contents/Resources/DWARF/Iphone
+    
+
+
+
+
+所以上面用xargs再做了一次转换是有点多此一举的，其实上面的shell可以写成:
+
+
+    
+    
+    old=$IFS;
+    IFS=$'\n';
+    for item in `find . -name "Iphone.app.dSYM"`;
+    do dwo=`dwarfdump -u $item`;echo $dwo >> tmpout;
+    done;
+    IFS=$old
+    
+
+
+
+补充：
+后来发现还有一种方式来解决这个问题，就是find的-print0来改变输出分割，再配合xargs的-0参数：
+find . -iname "Iphone.app.dSYM" -print0 | xargs -0 dwarfdump -u 

@@ -1,0 +1,41 @@
+---
+author: huji
+comments: true
+date: 2014-06-23 00:16:19+00:00
+layout: post
+slug: 开源万岁_解决robovm打包找不到签名的问题
+title: 开源万岁_解决robovm打包找不到签名的问题
+categories:
+- opensource
+---
+Move On终于走到最后阶段，憋了3个多月，finally。
+
+但最后用robovm打ipad包的时候，发现老是报一个No signing identity found matching的错误，但我已经反复折腾过证书的问题，我基本上确定在我的mac上证书是没有问题的，在google上反复搜索这个问题的时候，终于在这里（https://groups.google.com/forum/#!msg/robovm/EHWN9VZbkiU/VmeOOajeVkcJ）发现一些有意义的信息，但是作者的解答并没有能解决我的问题，好在在这个帖子里发现robovm的寻找signing identity的方法。
+
+运行了对应的java -cp robovm-0.0.6/lib/robovm-compiler.jar org.robovm.compiler.target.ios.SigningIdentity命令，只输出了一个“[]”，但执行  security find-identity -v -p codesigning的时候，发现自己的证书确实是存在的，自此我基本上确定是robovm自己的问题了，我阅读了org.robovm.compiler.target.ios.SigningIdentity的源代码，发现这么一段代码：
+
+	 String out = new Executor(Logger.NULL_LOGGER, "security")
+                .args("find-identity", "-v", "-p", "codesigning").execCapture();
+    /* Output from security looks like this:
+     *   1) 62480BA6FC7FACD7CA4100812ABAE9C86FB43DCF "iPhone Developer: Niklas Therning (NZ2HZ85PAR)"
+     *   2) 069675F14EDB7A7482A7357B34A9383D84B7DFEA "iPhone Distribution: Trillian AB"
+     *     2 valid identities found
+     */
+    ArrayList<SigningIdentity> ids = new ArrayList<SigningIdentity>();
+    Pattern pattern = Pattern.compile("^\\d+\\) ([0-9A-F]+) \"(.*)\"$");
+    for (String line : out.split("\n")) {
+        line = line.trim();
+        Matcher matcher = pattern.matcher(line);
+        if (!matcher.find()) {
+            break;
+        }
+        ids.add(new SigningIdentity(matcher.group(2), matcher.group(1)));
+    }
+    Collections.sort(ids);
+    return ids;
+
+终于发现问题所在，这段代码中的正则并不能匹配到证书中包含被revoked掉得证书的情况，当不能匹配到时，整个循环直接break掉，所以在我的mac上，第一个证书就是revoked掉得，所以总是找不到任何有效的证书。
+
+于是我删掉了已经被revoked掉的证书，打包成功。
+
+我在robovm的github项目中反馈了这个问题，但没有人鸟我，后来我发现之前也已经有人反馈过这个问题了，但一直也没有解决，还好这是个开源项目，不然我还真不知道怎么解决这个问题。回头有空了提一个pull request试试，可能作者会采纳。

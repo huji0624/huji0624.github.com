@@ -1,0 +1,207 @@
+---
+author: huji
+comments: true
+date: 2018-10-29 10:20:59+00:00
+layout: post
+slug: Linux程序性能优化探索(2)
+title: Linux程序性能优化探索(2)
+categories:
+- coding
+---
+上篇说到准备按照编译器的优化选项去正面研究一下，到底那些操作是比较耗时的，会被编译器优化掉，但读了一下相关的选项，发现没有对应领域内的经验积累，对于文档所描述的一些优化行为完全不之所云，就算通过google搜索到了对应描述的字面含义，也不理解文档所说的具体优化逻辑，因为每一条优化选项并不会给出一个具体的例子（或者是我没有找到合适的文档）。所以还是以测试的手段入手了，虽然我并不是很喜欢这种方式，聊胜于无。
+
+
+
+先说下为什么我不喜欢用测试的方式去了解一些基础操作的性能，因为随着你对计算机底层的东西了解得越多，就越发现很多东西并不是表面上的那个样子，为了程序运行的性能，操作系统和计算机硬件做了很多“黑魔法”的事情来提升运行速度，比如编译器优化，存储器山的利用，cpu执行的流水线，分支预测等等等等，在我们没有对更底层的原理理解和掌握之前，你任何的测试代码很可能只是在做你以为他在做的事情，而实际上并不是如此，即便你已经或者自认为很好地掌握了一些底层的原理，但在这些原理形成一个负责系统来运行你的测试程序的时候，你需要非常非常小心地来构筑你的测试代码才能获得你想要的测试目标，否则很容易得到一个完全错误的结果。当然这里探讨的前提是，你测试目标的精度受以上这些因素的影响比较严重。
+
+
+
+看下部分结果：
+
+```
+loop 556646
+loop 535610
+oplo 534653
+oplo 533546
+plus 652824
+comp 534164
+splu 534136
+sub- 650604
+mult 651561
+mu13 533868
+muad 1062791
+devi 12420962
+shil 619560
+shir 512429
+mod- 1653602
+sadd 513221
+ssub 1013864
+adds 512586
+subs 524175
+and- 1012860
+or-- 511436
+not- 511699
+xor- 1040424
+more 1056103
+less 1016224
+nomo 1033772
+nole 1053382
+noeq 1014352
+equa 1011015
+land 1020935
+lor- 523777
+lnot 1071988
+addr 532624
+adr2 530715
+adr3 2851372
+poin 514264
+double-plus 1014891
+double-plu2 1016085
+double-sub- 1013789
+double-mult 1015994
+double-devi 6720873
+double-log- 26090602
+double-log2 16970145
+double-lg10 33322797
+double-sqrt 3508438
+double-more 1050219
+double-conv 1012579
+```
+
+
+
+测试时我使用了gcc的-Og编译选项尽量避免一些编译优化，并且阅读了几乎每一个测试case的生成的汇编代码，确定编译出来的程序是我原本c程序想要表达的意思。测试的代码都大体如上一篇文章中写到的形式，运行时绑定到固定的核，采用RDTSC指令来获取的时间戳。这里的数字暂时我们就不要管绝对值了，看一下相对值吧。
+
+
+
+首先在整数的运算中，devi 12420962（除法），mod- 1653602（取模），都是比较耗时的运算，其他的差别不打的运算，不太好说到底有多大差别，因为上面的loop操作其实是没有任何其他指令在循环体中，但可以看到，他和一些加法减法操作耗时是差不多的，所以这里我只能理解是cpu流水线的功劳。
+
+
+
+从整数（int）和double对比来看，浮点数是比整数要更慢一点，如果结果没有错误的话，加减等操作差不多是两倍的差距，log和sqrt这些运算是为了测试看一下量级，和一般的指令不是一回事，所以这里的值不太有对比的意义了。
+
+
+
+#### 协议
+
+websocket和http协议在我们的场景中被大量使用，使用网络上一些公开的库可以满足基本的功能的满足，但其性能并不能满足我们的需求。所以后来一段时间我着手开始看看这方面的东西。
+
+
+
+我尝试阅读了RFC6455，自己实现了一个具有30%功能的websocket客户端程序，虽然有一部分协议并没有实现，但对我们的业务需求来说，实现的这一部分功能已经能满足我们100%的需求，从实际的测试情况看，自己实现的websocket客户端，比使用libwebsocket实现的客户端快了上百倍，这也是清理之中的。第一，我们只需要一个简单的websocekt客户端程序，而一些通用库通常都会有对客户端和服务端的同时的实现，有的甚至还支持很多别的协议，这就让程序的复杂度上升，第二就是通用库会对协议有一个比较完整的实现，这也会带来一些性能上的损失。这里我只是从客户端的低延迟的角度来衡量这个性能，虽然绝对值上来看，单个消息上也就是快了那么几百个us，但在我们的业务场景中，这都是值得的。
+
+
+
+同样的，我也参照RFC2616和RFC2818，实现了一个c语言的http和https的客户端实现，在延迟方面也有一定提升。
+
+
+
+这是我第一次尝试从最原始的RFC文档实现一些通用的协议，有下面几点感受：1.RFC协议都是很严谨的协议文档，阅读的难度并不高，通过阅读协议本身，可以对一些常用的技术有更深入的理解。更容易理解这些技术的边界在哪里。2.自己动手实现协议并没有那么难，尤其是你只有某一个特定方面的需求的时候，像我自己实现的webscoekt和https的客户端，都是不到1000行代码。3.学习协议最好的方式就是读读协议文档，然后自己实现它。
+
+
+
+#### Socket API
+
+
+
+自己实现websocket协议和http协议势必就会涉及到socket编程，这一块属于网络编程的东西，我后来主要翻阅了《unix网络编程》这本书，对一些socket api的参数和各种用法的区别更了解一些。《u网》这本书更多的像一本工具手册，适合忘记一些函数的用法的时候来查阅一下，而其中对一些更底层的原理性的东西并没有很深入的讲解更多的是讲了如何使用，如何写代码。
+
+
+
+在阅读的过程中发现一个对我们的测试很有帮助的工具，tcpdump，很早之前读《unix高级编程》的时候貌似也看到过这个工具（或者是《tcp/ip详解》），结合自己写的http库，很适合测试整个网络每个部分的性能。因为tcpdump中可以输出一个时间戳，这个时间戳对我们的测试很有帮助，可以让我们搞明白具体在内核和网络的耗时，关于这个时间戳，官方给的解释如下：
+
+```
+Timestamps
+
+By default, all output lines are preceded by a timestamp. The timestamp is the current clock time in the form
+
+hh:mm:ss.frac
+and is as accurate as the kernel's clock. The timestamp reflects the time the kernel applied a time stamp to the packet. No attempt is made to account for the time lag between when the network interface finished receiving the packet from the network and when the kernel applied a time stamp to the packet; that time lag could include a delay between the time when the network interface finished receiving a packet from the network and the time when an interrupt was delivered to the kernel to get it to read the packet and a delay between the time when the kernel serviced the `new packet' interrupt and the time when it applied a time stamp to the packet.
+```
+
+
+
+你说什么就是什么咯，反正暂时不是很懂，只是在《u网》中，有一章叫数据链路访问，并提到tcpdump之类的程序就是使用了这个技术，通过这个接口，可以从内核直接拿到数据链路层帧的帧数据，然后又有一章叫原始套接字，可以自己组装ip数据包进行发送，和接收到原始的ip包自己实现更上层的协议。现在都还有点懵逼，这两个不就是一样的意思吗？因为书中对数据链路层访问的实际例子讲得不多，所以我猜测这两者的区别只是是否包含数据链层帧头的区别，因为payload部分就是ip数据包了啊。
+
+
+
+为了搞明白一些跟底层的实现东西，我又翻阅了《深入理解linux内核》中网络子系统这一个章节，把整个内核的网络部分实现大致的细节了解得更清楚一些了。读完了又有个更深的疑问，看起来内核除了netfillter以外并没有提供一个钩子函数可以让程序在内核状态下执行，而且也没有更多的提供访问数据链路层数据的实现细节，而tcpdump的代码应该都是运行在用户态的，数据链路层帧的数据从网卡过来，如果直接就丢给用户态下的tcpdump，那这个时间戳的说法怕是有点不合适。万一是tcpdump在用户态自己打的时间戳，那会给我们的测试带来不小的误差。为了确认这个事情，决定翻一翻代码，还好tcpdump和他更下层使用的网络sniffer库都是开源的。
+
+
+
+从github找到了tcpdump依赖的嗅探包libpcap的源码，大致看了一下实现。主要有两个，一是，嗅探的实现并没有特别神奇的地方，其实就是我们普通的socket编程，只不过创建socket的时候指定的参数不一样，就可以接收不同网络实现层的数据，libpcap中有两个地方，如果是比较老的linux版本，那就使用了比较老的参数来创建socket，比如
+
+```
+pcap-linux.c:6853    active_old
+
+handle->fd = socket(PF_INET,SOCK_PACKET,htons(ETH_P_ALL));
+```
+
+应该是2.6之后的linux内核，可以使用更新的方法来控制这些参数：
+
+```
+pcap-linux.c:3653    active_new
+
+sock_fd = is_any_device?socket(PF_PACKET,SOCK_DGRAM,protocol):socket(PF_PACKET,SOCK_RAW,protocol);
+```
+
+然后，让你对这些文件描述符调用类似read之类的函数的时候，就会有对应的数据被读取过来了，恩，一切皆文件。我就去读取数据包之类的函数找了一下，找到了那个读取时间戳的代码：
+
+```
+pcap-linux.c:2095    pcap_read_packet
+
+	/* get timestamp for this packet */
+#if defined(SIOCGSTAMPNS) && defined(SO_TIMESTAMPNS)
+	if (handle->opt.tstamp_precision == PCAP_TSTAMP_PRECISION_NANO) {
+		if (ioctl(handle->fd, SIOCGSTAMPNS, &pcap_header.ts) == -1) {
+			pcap_fmt_errmsg_for_errno(handle->errbuf,
+			    PCAP_ERRBUF_SIZE, errno, "SIOCGSTAMPNS");
+			return PCAP_ERROR;
+		}
+        } else
+#endif
+	{
+		if (ioctl(handle->fd, SIOCGSTAMP, &pcap_header.ts) == -1) {
+			pcap_fmt_errmsg_for_errno(handle->errbuf,
+			    PCAP_ERRBUF_SIZE, errno, "SIOCGSTAMP");
+			return PCAP_ERROR;
+		}
+        }
+```
+
+可以看到，库的代码本身并没有使用类似gettimeofday之类的时间函数去获取时间然后写到时间戳的位置上去，而是调用了另外一个系统调用ioctl，这里代码的含义是，获取上一个包的时间戳。其实截止这里基本上已经可以看到tcpdump的说法是没有问题的，这种又大又古老的开源项目还是很靠谱的。
+
+
+
+后面又稍微做了一点搜索，可以看到linux源码中对ioctl实现的部分有：
+
+```
+	case SIOCGSTAMPNS: /* borrowed from IP */
+#ifdef CONFIG_COMPAT
+		if (compat)
+			error = compat_sock_get_timestampns(sk, argp);
+		else
+#endif
+			error = sock_get_timestampns(sk, argp);
+		goto done;
+```
+
+这个sock_get_timestampns的实现如下：
+
+```
+int sock_get_timestampns(struct sock *sk, struct timespec __user *userstamp)
+{
+	struct timespec ts;
+	sock_enable_timestamp(sk, SOCK_TIMESTAMP);
+	ts = ktime_to_timespec(sk->sk_stamp);
+	if (ts.tv_sec == -1)
+		return -ENOENT;
+	if (ts.tv_sec == 0) {
+		sk->sk_stamp = ktime_get_real();
+		ts = ktime_to_timespec(sk->sk_stamp);
+	}
+	return copy_to_user(userstamp, &ts, sizeof(ts)) ? -EFAULT : 0;
+}
+```
+
+可以看到这里获取到的时间戳也不是一个实时获取的时间戳，而是一个之前已经存储在sk_stamp中的时间戳。后面没有再继续深入了，这里我觉得已经可以放心地使用tcpdump中这个时间戳了。
